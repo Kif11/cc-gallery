@@ -12,7 +12,7 @@
     </style>
   </head>
   <body>
-    {{if eq .Ext ".jpg"}}
+    {{if or (eq .Ext ".jpg") (eq .Ext ".webp")}}
     <img
       src="/assets/{{$.Year}}/{{.Name}}{{.Ext}}"
     />

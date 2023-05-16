@@ -32,7 +32,7 @@
       {{range .Images}}
       <div class="image">
         <a href="/gallery/{{$.Year}}/{{.Name}}">
-          {{if eq .Ext ".jpg"}}
+          {{if or (eq .Ext ".jpg") (eq .Ext ".webp")}}
           <img
             class="lazy"
             src="https://placehold.co/600x600"

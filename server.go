@@ -1,6 +1,7 @@
 package main
 
 import (
+	"embed"
 	"fmt"
 	"html/template"
 	"net/http"
@@ -12,6 +13,15 @@ import (
 	"github.com/gorilla/mux"
 )
 
+//go:embed pages/*.html
+var content embed.FS
+
+var funcs = template.FuncMap{
+	"hasSuffix": strings.HasSuffix,
+}
+
+var tmpl *template.Template = template.Must(template.New("").Funcs(funcs).ParseFS(content, "pages/*.html"))
+
 type Gallery struct {
 	Year   string
 	Images []Image
@@ -19,7 +29,8 @@ type Gallery struct {
 
 type Image struct {
 	Name string
-	Path string
+	Ext  string
+	Year string
 }
 
 func returnError(w http.ResponseWriter, header int, msg string) {
@@ -48,16 +59,6 @@ func main() {
 	http.ListenAndServe(address, r)
 }
 
-func indexHandler(w http.ResponseWriter, r *http.Request) {
-	years, _ := filepath.Glob("media/*")
-	for i, year := range years {
-		years[i] = strings.TrimPrefix(year, "media/")
-	}
-
-	t, _ := template.ParseFiles("pages/index.html")
-	t.Execute(w, years)
-}
-
 func findFile(dir string, fileName string) (string, error) {
 	var foundPath string
 
@@ -81,6 +82,19 @@ func findFile(dir string, fileName string) (string, error) {
 	return foundPath, nil
 }
 
+func indexHandler(w http.ResponseWriter, r *http.Request) {
+	years, _ := filepath.Glob("media/*")
+	for i, year := range years {
+		years[i] = strings.TrimPrefix(year, "media/")
+	}
+
+	err := tmpl.ExecuteTemplate(w, "index.html", years)
+	if err != nil {
+		returnError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+}
+
 func postHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	id := vars["id"]
@@ -93,34 +107,32 @@ func postHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	image := Image{Path: path.Join("assets", year, fileName), Name: id}
+	image := Image{Ext: path.Ext(fileName), Name: id, Year: year}
 
-	t, err := template.ParseFiles("pages/post.html")
-
+	err = tmpl.ExecuteTemplate(w, "post.html", image)
 	if err != nil {
-		fmt.Println(err)
-	}
-
-	err = t.Execute(w, image)
-
-	if err != nil {
-		fmt.Printf("Error executing template: %s\n", err)
+		returnError(w, http.StatusInternalServerError, err.Error())
+		return
 	}
 }
 
 func yearHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	year := vars["year"]
-	files, _ := filepath.Glob("media/" + year + "/*.jpg")
-
 	var images []Image
 
+	files, err := os.ReadDir(path.Join("./media", year))
+	if err != nil {
+		returnError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
 	for _, f := range files {
-		if strings.Contains(f, "100x100") {
+		if strings.Contains(f.Name(), "100x100") {
 			continue
 		}
 
-		images = append(images, Image{Path: filepath.Base(f), Name: getFileName(f)})
+		images = append(images, Image{Ext: path.Ext(f.Name()), Name: getFileName(f.Name()), Year: year})
 	}
 
 	gallery := Gallery{
@@ -128,15 +140,9 @@ func yearHandler(w http.ResponseWriter, r *http.Request) {
 		Images: images,
 	}
 
-	t, err := template.ParseFiles("pages/year.html")
-
+	err = tmpl.ExecuteTemplate(w, "year.html", gallery)
 	if err != nil {
-		fmt.Println(err)
-	}
-
-	err = t.Execute(w, gallery)
-
-	if err != nil {
-		fmt.Printf("Error executing template: %s\n", err)
+		returnError(w, http.StatusInternalServerError, err.Error())
+		return
 	}
 }

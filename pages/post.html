@@ -14,11 +14,11 @@
   <body>
     {{if or (eq .Ext ".jpg") (eq .Ext ".webp")}}
     <img
-      src="/assets/{{$.Year}}/{{.Name}}{{.Ext}}"
+      src="/gallery/assets/{{$.Year}}/{{.Name}}{{.Ext}}"
     />
     {{else if eq .Ext ".mp4"}}
     <video
-      src="/assets/{{$.Year}}/{{.Name}}{{.Ext}}"
+      src="/gallery/assets/{{$.Year}}/{{.Name}}{{.Ext}}"
       controls
     />
     {{end}}

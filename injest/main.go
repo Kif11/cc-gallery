@@ -3,16 +3,12 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"image"
-	"image/jpeg"
 	"io"
 	"os"
 	"path"
 	"path/filepath"
 	"strconv"
 	"time"
-
-	"github.com/nfnt/resize"
 )
 
 type MediaMetadata struct {
@@ -35,11 +31,11 @@ type MediaList struct {
 	Media []Media `json:"media"`
 }
 
-var rootDir = "instagram"
+var rootDir = "../instagram_data"
 
 func main() {
 	// Read the JSON file
-	file, _ := os.Open("instagram_data/content/posts_1.json")
+	file, _ := os.Open("../instagram_data/content/posts_1.json")
 	defer file.Close()
 
 	decoder := json.NewDecoder(file)
@@ -58,7 +54,7 @@ func main() {
 			unixTimestamp := strconv.Itoa(int(date.Unix()))
 
 			// Create the directory if it does not exist
-			dir := fmt.Sprintf("gallery/%d", date.Year())
+			dir := fmt.Sprintf("media/%d", date.Year())
 			if _, err := os.Stat(dir); os.IsNotExist(err) {
 				os.MkdirAll(dir, 0755)
 			}
@@ -73,6 +69,9 @@ func main() {
 			defer srcFile.Close()
 
 			dstPath := filepath.Join(dir, fmt.Sprintf("%s%s", unixTimestamp, path.Ext(media.URI)))
+			if filepath.Ext(dstPath) == "" {
+				dstPath = fmt.Sprintf("%s%s", dstPath, ".mp4")
+			}
 			dstFile, err := os.Create(dstPath)
 			if err != nil {
 				fmt.Println(err)
@@ -86,26 +85,26 @@ func main() {
 				continue
 			}
 
-			// Generate a thumbnail for images
-			if filepath.Ext(media.URI) == ".jpg" {
-				srcFile.Seek(0, 0) // reset the read pointer
-				img, _, err := image.Decode(srcFile)
-				if err != nil {
-					fmt.Println(err)
-					continue
-				}
+			// // Generate a thumbnail for images
+			// if filepath.Ext(media.URI) == ".jpg" {
+			// 	srcFile.Seek(0, 0) // reset the read pointer
+			// 	img, _, err := image.Decode(srcFile)
+			// 	if err != nil {
+			// 		fmt.Println(err)
+			// 		continue
+			// 	}
 
-				thumb := resize.Thumbnail(100, 100, img, resize.Lanczos3)
-				thumbPath := filepath.Join(dir, fmt.Sprintf("%s_100x100.jpg", unixTimestamp))
-				thumbFile, err := os.Create(thumbPath)
-				if err != nil {
-					fmt.Println(err)
-					continue
-				}
-				defer thumbFile.Close()
+			// 	thumb := resize.Thumbnail(100, 100, img, resize.Lanczos3)
+			// 	thumbPath := filepath.Join(dir, fmt.Sprintf("%s_100x100.jpg", unixTimestamp))
+			// 	thumbFile, err := os.Create(thumbPath)
+			// 	if err != nil {
+			// 		fmt.Println(err)
+			// 		continue
+			// 	}
+			// 	defer thumbFile.Close()
 
-				jpeg.Encode(thumbFile, thumb, &jpeg.Options{Quality: 80})
-			}
+			// 	jpeg.Encode(thumbFile, thumb, &jpeg.Options{Quality: 80})
+			// }
 		}
 	}
 }

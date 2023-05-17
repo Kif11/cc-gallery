@@ -1,0 +1,14 @@
+[Unit]
+Description=Codercat Gallery
+After=network.target
+
+[Service]
+WorkingDirectory=/home/kiko/gallery/
+Type=simple
+Restart=always
+RestartSec=1
+User=kiko
+ExecStart=/home/kiko/gallery/gallery
+
+[Install]
+WantedBy=multi-user.target

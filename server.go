@@ -52,7 +52,7 @@ func main() {
 	r.HandleFunc("/gallery/{year}/{id}", postHandler)
 
 	fs := http.FileServer(http.Dir("./media/"))
-	r.PathPrefix("/assets/").Handler(http.StripPrefix("/assets/", fs))
+	r.PathPrefix("/gallery/assets/").Handler(http.StripPrefix("/gallery/assets/", fs))
 
 	address := "localhost:8080"
 	fmt.Printf("Listening on %s\n", address)

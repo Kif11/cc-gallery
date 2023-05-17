@@ -16,8 +16,36 @@ import (
 //go:embed pages/*.html
 var content embed.FS
 
+var mediaDir = "./media"
+
+func isImage(file string) bool {
+	ext := strings.ToLower(path.Ext(file))
+	if ext == ".jpg" || ext == ".webp" || ext == ".png" || ext == ".gif" {
+		return true
+	}
+
+	return false
+}
+
+func isVideo(file string) bool {
+	ext := strings.ToLower(path.Ext(file))
+	if ext == ".mp4" || ext == ".mov" {
+		return true
+	}
+
+	return false
+}
+
+func getFileName(path string) string {
+	base := filepath.Base(path)
+	ext := filepath.Ext(base)
+	return strings.TrimSuffix(base, ext)
+}
+
 var funcs = template.FuncMap{
-	"hasSuffix": strings.HasSuffix,
+	"isImage":     isImage,
+	"isVideo":     isVideo,
+	"getFileName": getFileName,
 }
 
 var tmpl *template.Template = template.Must(template.New("").Funcs(funcs).ParseFS(content, "pages/*.html"))
@@ -29,19 +57,22 @@ type Gallery struct {
 
 type Image struct {
 	Name string
-	Ext  string
-	Year string
+}
+
+type LinkedImage struct {
+	Cur  Image
+	Prev Image
+	Next Image
+}
+
+type Post struct {
+	Year  string
+	Image LinkedImage
 }
 
 func returnError(w http.ResponseWriter, header int, msg string) {
 	w.WriteHeader(header)
 	w.Write([]byte(msg))
-}
-
-func getFileName(path string) string {
-	base := filepath.Base(path)
-	ext := filepath.Ext(base)
-	return strings.TrimSuffix(base, ext)
 }
 
 func main() {
@@ -51,7 +82,7 @@ func main() {
 	r.HandleFunc("/gallery/{year}", yearHandler)
 	r.HandleFunc("/gallery/{year}/{id}", postHandler)
 
-	fs := http.FileServer(http.Dir("./media/"))
+	fs := http.FileServer(http.Dir(mediaDir))
 	r.PathPrefix("/gallery/assets/").Handler(http.StripPrefix("/gallery/assets/", fs))
 
 	address := "localhost:8080"
@@ -59,27 +90,45 @@ func main() {
 	http.ListenAndServe(address, r)
 }
 
-func findFile(dir string, fileName string) (string, error) {
-	var foundPath string
+func findImage(year string, fileName string) (LinkedImage, error) {
+	li := LinkedImage{}
 
-	err := filepath.Walk(dir, func(path string, info os.FileInfo, err error) (string error) {
-		if err != nil {
-			return err
-		}
-
-		if !info.IsDir() && getFileName(info.Name()) == fileName {
-			foundPath = info.Name()
-			return nil
-		}
-
-		return nil
-	})
-
+	files, err := os.ReadDir(path.Join(mediaDir, year))
 	if err != nil {
-		return "", err
+		return li, nil
 	}
 
-	return foundPath, nil
+	for i := 0; i < len(files); i++ {
+		f := files[i]
+
+		if getFileName(f.Name()) != fileName {
+			continue
+		}
+
+		li.Cur = Image{Name: f.Name()}
+
+		// Image found
+
+		if len(files) == 1 { // Array length of 1
+			return li, nil
+		}
+
+		if i == 0 {
+			// First item
+			li.Next = Image{Name: files[i+1].Name()}
+		} else if i == len(files)-1 {
+			// Last item
+			li.Prev = Image{Name: files[i-1].Name()}
+		} else {
+			// Middle item
+			li.Next = Image{Name: files[i+1].Name()}
+			li.Prev = Image{Name: files[i-1].Name()}
+		}
+
+		return li, nil
+	}
+
+	return li, fmt.Errorf("image with id %s not found", fileName)
 }
 
 func indexHandler(w http.ResponseWriter, r *http.Request) {
@@ -99,17 +148,19 @@ func postHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	id := vars["id"]
 	year := vars["year"]
-	dir := fmt.Sprintf("./media/%s", year)
 
-	fileName, err := findFile(dir, id)
+	li, err := findImage(year, id)
 	if err != nil {
 		returnError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	image := Image{Ext: path.Ext(fileName), Name: id, Year: year}
+	post := Post{
+		Year:  year,
+		Image: li,
+	}
 
-	err = tmpl.ExecuteTemplate(w, "post.html", image)
+	err = tmpl.ExecuteTemplate(w, "post.html", post)
 	if err != nil {
 		returnError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -121,7 +172,7 @@ func yearHandler(w http.ResponseWriter, r *http.Request) {
 	year := vars["year"]
 	var images []Image
 
-	files, err := os.ReadDir(path.Join("./media", year))
+	files, err := os.ReadDir(path.Join(mediaDir, year))
 	if err != nil {
 		returnError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -132,7 +183,7 @@ func yearHandler(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		images = append(images, Image{Ext: path.Ext(f.Name()), Name: getFileName(f.Name()), Year: year})
+		images = append(images, Image{Name: f.Name()})
 	}
 
 	gallery := Gallery{

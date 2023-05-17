@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Document</title>
+    <title>Post</title>
     <style>
       img {
         max-width: 100%;
@@ -12,15 +12,44 @@
     </style>
   </head>
   <body>
-    {{if or (eq .Ext ".jpg") (eq .Ext ".webp")}}
-    <img
-      src="/gallery/assets/{{$.Year}}/{{.Name}}{{.Ext}}"
-    />
-    {{else if eq .Ext ".mp4"}}
-    <video
-      src="/gallery/assets/{{$.Year}}/{{.Name}}{{.Ext}}"
-      controls
-    />
+    <a class="back" href="/gallery/{{.Year}}">Back</a>
+
+    {{if ne .Image.Prev.Name ""}}
+      <a class="prev" href="/gallery/{{.Year}}/{{getFileName .Image.Prev.Name}}">Prev</a>
     {{end}}
+    
+    {{if isImage .Image.Cur.Name}}
+      <img
+        src="/gallery/assets/{{.Year}}/{{.Image.Cur.Name}}"
+      />
+    {{else if isVideo .Image.Cur.Name}}
+      <video
+        src="/gallery/assets/{{.Year}}/{{.Image.Cur.Name}}"
+        controls
+      />
+    {{end}}
+
+    {{if ne .Image.Next.Name ""}}
+      <a class="next" href="/gallery/{{.Year}}/{{getFileName .Image.Next.Name}}">Next</a>
+    {{end}}
+
+    <script>
+      const backLink = document.querySelector('.back');
+      const nextLink = document.querySelector('.next');
+      const prevLink = document.querySelector('.prev');
+
+      document.addEventListener("keydown", (e) => {
+        if (e.keyCode == "37") {
+          // left
+          prevLink.click()
+        } else if (e.keyCode == "39") {
+          // right
+          nextLink.click()
+        } else if (e.keyCode == "38") {
+          // up
+          backLink.click()
+        }
+      });
+    </script>
   </body>
 </html>

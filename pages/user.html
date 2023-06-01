@@ -7,9 +7,9 @@
     <title>Codercat Gallery</title>
   </head>
   <body>
-    <h1>Users Galleries</h1>
-    {{range .Users}}
-    <a href="/gallery/{{.}}">{{.}}</a><br />
+    <h1>{{.User}} Gallery</h1>
+    {{range .Years}}
+    <a href="/gallery/{{$.User}}/{{.}}">{{.}}</a><br />
     {{end}}
   </body>
 </html>

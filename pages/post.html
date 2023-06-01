@@ -6,48 +6,79 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Post</title>
     <style>
+      .ct {
+        display: flex;
+        height: 100vh;
+        width: 100%;
+      }
+
+      .main {
+        flex-grow: 1;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+      }
+
+      .back {
+        /* position: absolute; */
+      }
+
+      .top {
+        width: 100%;
+        display: flex;
+        justify-content: center;
+      }
+
       img {
-        max-width: 100%;
+        height: 90vh;
+      }
+
+      video {
+        width: 100%;
       }
     </style>
   </head>
   <body>
-    <a class="back" href="/gallery/{{.Year}}">Back</a>
+    <div class="top">
+      <a class="back" href="/gallery/{{.User}}/{{.Year}}">Back</a>
+    </div>
+    <div class="ct">
+      <div class="left">
+        {{if ne .Image.Prev.Name ""}}
+        <a class="prev" href="/gallery/{{.User}}/{{.Year}}/{{getFileName .Image.Prev.Name}}">Prev</a>
+        {{end}}
+      </div>
 
-    {{if ne .Image.Prev.Name ""}}
-      <a class="prev" href="/gallery/{{.Year}}/{{getFileName .Image.Prev.Name}}">Prev</a>
-    {{end}}
-    
-    {{if isImage .Image.Cur.Name}}
-      <img
-        src="/gallery/assets/{{.Year}}/{{.Image.Cur.Name}}"
-      />
-    {{else if isVideo .Image.Cur.Name}}
-      <video
-        src="/gallery/assets/{{.Year}}/{{.Image.Cur.Name}}"
-        controls
-      />
-    {{end}}
+      <div class="main">
+        {{if isImage .Image.Cur.Name}}
+        <img src="/gallery/assets/{{.User}}/{{.Year}}/{{.Image.Cur.Name}}" />
+        {{else if isVideo .Image.Cur.Name}}
+        <video src="/gallery/assets/{{.User}}/{{.Year}}/{{.Image.Cur.Name}}" controls muted autoplay loop />
+        {{end}}
+      </div>
 
-    {{if ne .Image.Next.Name ""}}
-      <a class="next" href="/gallery/{{.Year}}/{{getFileName .Image.Next.Name}}">Next</a>
-    {{end}}
+      <div class="right">
+        {{if ne .Image.Next.Name ""}}
+        <a class="next" href="/gallery/{{.User}}/{{.Year}}/{{getFileName .Image.Next.Name}}">Next</a>
+        {{end}}
+      </div>
+    </div>
 
     <script>
-      const backLink = document.querySelector('.back');
-      const nextLink = document.querySelector('.next');
-      const prevLink = document.querySelector('.prev');
+      const backLink = document.querySelector(".back");
+      const nextLink = document.querySelector(".next");
+      const prevLink = document.querySelector(".prev");
 
       document.addEventListener("keydown", (e) => {
         if (e.keyCode == "37") {
           // left
-          prevLink.click()
+          prevLink.click();
         } else if (e.keyCode == "39") {
           // right
-          nextLink.click()
+          nextLink.click();
         } else if (e.keyCode == "38") {
           // up
-          backLink.click()
+          backLink.click();
         }
       });
     </script>

@@ -1,14 +1,20 @@
 <!DOCTYPE html>
 <html>
   <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{{.Year}} Gallery</title>
     <style>
       body {
         font-family: Arial, sans-serif;
       }
+      
       .gallery {
         display: grid;
         grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
       }
+      
       .gallery .image {
         width: 100%;
         height: 0;
@@ -16,6 +22,7 @@
         position: relative;
         overflow: hidden;
       }
+
       img,
       video {
         position: absolute;
@@ -27,16 +34,15 @@
     </style>
   </head>
   <body>
-    <h2>Image Gallery for {{.Year}}</h2>
     <a class="back" href="/gallery/">Back</a>
     <div class="gallery">
       {{range .Images}}
       <div class="image">
-        <a href="/gallery/{{$.Year}}/{{getFileName .Name}}">
+        <a href="/gallery/{{$.User}}/{{$.Year}}/{{getFileName .Name}}">
           {{if isImage .Name}}
-          <img class="lazy" src="https://placehold.co/600x600" data-url="/gallery/assets/{{$.Year}}/{{.Name}}" />
+          <img class="lazy" src="" data-url="/gallery/assets/{{$.User}}/{{$.Year}}/{{.Name}}" />
           {{else if isVideo .Name}}
-          <video class="lazy" src="" data-url="/gallery/assets/{{$.Year}}/{{.Name}}" muted autoplay loop controls />
+          <video class="lazy" src="" data-url="/gallery/assets/{{$.User}}/{{$.Year}}/{{.Name}}" muted autoplay loop controls />
           {{end}}
         </a>
       </div>

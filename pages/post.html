@@ -6,60 +6,30 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Post</title>
     <style>
-      .ct {
-        display: flex;
-        height: 100vh;
-        width: 100%;
-      }
-
-      .main {
-        flex-grow: 1;
-        display: flex;
-        justify-content: center;
-        align-items: center;
-      }
-
-      .back {
-        /* position: absolute; */
-      }
-
-      .top {
-        width: 100%;
-        display: flex;
-        justify-content: center;
-      }
-
-      img {
-        height: 90vh;
-      }
-
-      video {
-        width: 100%;
-      }
+      {{.Styles}}
     </style>
   </head>
   <body>
-    <div class="top">
-      <a class="back" href="/gallery/{{.User}}/{{.Year}}">Back</a>
-    </div>
     <div class="ct">
-      <div class="left">
-        {{if ne .Image.Prev.Name ""}}
-        <a class="prev" href="/gallery/{{.User}}/{{.Year}}/{{getFileName .Image.Prev.Name}}">Prev</a>
-        {{end}}
-      </div>
-
       <div class="main">
         {{if isImage .Image.Cur.Name}}
-        <img src="/gallery/assets/{{.User}}/{{.Year}}/{{.Image.Cur.Name}}" />
+        <img src="{{.Image.Cur.PublicPath}}" />
         {{else if isVideo .Image.Cur.Name}}
-        <video src="/gallery/assets/{{.User}}/{{.Year}}/{{.Image.Cur.Name}}" controls muted autoplay loop />
+        <video src="{{.Image.Cur.PublicPath}}" controls muted autoplay loop />
         {{end}}
       </div>
+    </div>
 
+    <div class="navbar">
+      <div class="left">
+        {{if ne .Image.Prev.Name ""}}
+        <a class="prev" href="{{.Image.Prev.PageLink}}">Prev</a>
+        {{end}}
+      </div>
+      <a class="back" href="/gallery/{{.User}}/{{.Year}}">Back</a>
       <div class="right">
         {{if ne .Image.Next.Name ""}}
-        <a class="next" href="/gallery/{{.User}}/{{.Year}}/{{getFileName .Image.Next.Name}}">Next</a>
+        <a class="next" href="{{.Image.Next.PageLink}}">Next</a>
         {{end}}
       </div>
     </div>

@@ -10,18 +10,67 @@ import (
 	"path/filepath"
 	"strings"
 
-	"bytes"
-	"encoding/base64"
-	"image/jpeg"
-
-	"github.com/disintegration/imaging"
 	"github.com/gorilla/mux"
 )
 
 //go:embed pages/*.html
+//go:embed public/*.css
 var content embed.FS
 
-var mediaDir = "media"
+var mediaDir = "public/media"
+
+var funcs = template.FuncMap{
+	"isImage": isImage,
+	"isVideo": isVideo,
+}
+
+var tmpl *template.Template = template.Must(template.New("").Funcs(funcs).ParseFS(content, "pages/*.html"))
+
+type MediaType int64
+
+const (
+	Other           = -1
+	Image MediaType = iota
+	Video
+)
+
+type Media struct {
+	Type       MediaType
+	Name       string
+	PublicPath string
+	PageLink   string
+}
+
+type LinkedMedia struct {
+	Cur  Media
+	Prev Media
+	Next Media
+}
+
+type IndexPage struct {
+	Users  []string
+	Styles template.CSS
+}
+
+type UserPage struct {
+	User   string
+	Years  []string
+	Styles template.CSS
+}
+
+type YearPage struct {
+	Year   string
+	User   string
+	Images []Media
+	Styles template.CSS
+}
+
+type PostPage struct {
+	Year   string
+	User   string
+	Image  LinkedMedia
+	Styles template.CSS
+}
 
 func isImage(file string) bool {
 	ext := strings.ToLower(path.Ext(file))
@@ -41,91 +90,10 @@ func isVideo(file string) bool {
 	return false
 }
 
-func getFileName(path string) string {
+func stripExtension(path string) string {
 	base := filepath.Base(path)
 	ext := filepath.Ext(base)
 	return strings.TrimSuffix(base, ext)
-}
-
-var funcs = template.FuncMap{
-	"isImage":     isImage,
-	"isVideo":     isVideo,
-	"getFileName": getFileName,
-}
-
-var tmpl *template.Template = template.Must(template.New("").Funcs(funcs).ParseFS(content, "pages/*.html"))
-
-func GenerateThumbnail(imagePath string) (string, error) {
-	// Open the image file
-	srcImage, err := imaging.Open(imagePath)
-	if err != nil {
-		return "", err
-	}
-
-	// Resize the image to 100x100px while preserving aspect ratio
-	resizedImage := imaging.Resize(srcImage, 100, 100, imaging.Lanczos)
-
-	// Blur the image
-	blurredImage := imaging.Blur(resizedImage, 0.5)
-
-	// Create a buffer to save the image
-	var buf bytes.Buffer
-
-	// Write the image to the buffer in JPEG format
-	err = jpeg.Encode(&buf, blurredImage, nil)
-	if err != nil {
-		return "", err
-	}
-
-	// Get the byte slice from the buffer
-	bytes := buf.Bytes()
-
-	// Base64 encode the byte slice
-	base64String := base64.StdEncoding.EncodeToString(bytes)
-
-	// Return the base64 encoded image
-	return base64String, nil
-}
-
-type Gallery struct {
-	Year   string
-	User   string
-	Images []Media
-}
-
-type MediaType int64
-
-const (
-	Other           = -1
-	Image MediaType = iota
-	Video
-)
-
-type Media struct {
-	Type      MediaType
-	Name      string
-	Thumbnail string // base64
-}
-
-type LinkedImage struct {
-	Cur  Media
-	Prev Media
-	Next Media
-}
-
-type Post struct {
-	Year  string
-	User  string
-	Image LinkedImage
-}
-
-type IndexPage struct {
-	Users []string
-}
-
-type UserPage struct {
-	User  string
-	Years []string
 }
 
 func returnError(w http.ResponseWriter, header int, msg string) {
@@ -140,7 +108,21 @@ func trimTrailingSlash(next http.Handler) http.Handler {
 	})
 }
 
-func GetMediaType(filePath string) MediaType {
+func getCss(path string) (template.CSS, error) {
+	css, err := content.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+
+	globalCss, err := content.ReadFile("public/global.css")
+	if err != nil {
+		return "", err
+	}
+
+	return template.CSS(append(css, globalCss...)), nil
+}
+
+func getMediaType(filePath string) MediaType {
 	ext := strings.ToLower(filepath.Ext(filePath))
 
 	switch ext {
@@ -153,10 +135,12 @@ func GetMediaType(filePath string) MediaType {
 	}
 }
 
-func makeMedia(name string) Media {
+func makeMedia(fileName string, user string, year string) Media {
 	return Media{
-		Type: GetMediaType(name),
-		Name: name,
+		Type:       getMediaType(fileName),
+		Name:       fileName,
+		PublicPath: path.Join("/", "gallery", "assets", "media", user, year, fileName),
+		PageLink:   path.Join("/", "gallery", user, year, stripExtension(fileName)),
 	}
 }
 
@@ -187,24 +171,8 @@ func listDirs(path string) ([]string, error) {
 	return dirNames, nil
 }
 
-func main() {
-	r := mux.NewRouter()
-
-	r.HandleFunc("/gallery", indexHandler)
-	r.HandleFunc("/gallery/{user}", userHandler)
-	r.HandleFunc("/gallery/{user}/{year}", yearHandler)
-	r.HandleFunc("/gallery/{user}/{year}/{id}", postHandler)
-
-	fs := http.FileServer(http.Dir(mediaDir))
-	r.PathPrefix("/gallery/assets/").Handler(http.StripPrefix("/gallery/assets/", fs))
-
-	address := "localhost:8080"
-	fmt.Printf("Listening on %s\n", address)
-	http.ListenAndServe(address, trimTrailingSlash(r))
-}
-
-func findImage(user string, year string, fileName string) (LinkedImage, error) {
-	li := LinkedImage{}
+func findImage(user string, year string, fileName string) (LinkedMedia, error) {
+	li := LinkedMedia{}
 
 	files, err := os.ReadDir(path.Join(mediaDir, user, year))
 	if err != nil {
@@ -214,11 +182,11 @@ func findImage(user string, year string, fileName string) (LinkedImage, error) {
 	for i := 0; i < len(files); i++ {
 		f := files[i]
 
-		if getFileName(f.Name()) != fileName {
+		if stripExtension(f.Name()) != fileName {
 			continue
 		}
 
-		li.Cur = Media{Name: f.Name()}
+		li.Cur = makeMedia(f.Name(), user, year)
 
 		// Image found
 
@@ -228,14 +196,14 @@ func findImage(user string, year string, fileName string) (LinkedImage, error) {
 
 		if i == 0 {
 			// First item
-			li.Next = makeMedia(files[i+1].Name())
+			li.Next = makeMedia(files[i+1].Name(), user, year)
 		} else if i == len(files)-1 {
 			// Last item
-			li.Prev = makeMedia(files[i-1].Name())
+			li.Prev = makeMedia(files[i-1].Name(), user, year)
 		} else {
 			// Middle item
-			li.Next = makeMedia(files[i+1].Name())
-			li.Prev = makeMedia(files[i-1].Name())
+			li.Next = makeMedia(files[i+1].Name(), user, year)
+			li.Prev = makeMedia(files[i-1].Name(), user, year)
 		}
 
 		return li, nil
@@ -250,12 +218,20 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 		returnError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+
 	for i, user := range users {
 		users[i] = strings.TrimPrefix(user, mediaDir)
 	}
 
+	styles, err := getCss("public/index.css")
+	if err != nil {
+		returnError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
 	pageData := IndexPage{
-		Users: users,
+		Users:  users,
+		Styles: styles,
 	}
 
 	err = tmpl.ExecuteTemplate(w, "index.html", pageData)
@@ -271,17 +247,25 @@ func userHandler(w http.ResponseWriter, r *http.Request) {
 
 	yearsDir := fmt.Sprintf("%s/%s/", mediaDir, user)
 	globPath := fmt.Sprintf("%s*", yearsDir)
-	years, _ := filepath.Glob(globPath)
-	for i, year := range years {
-		years[i] = strings.TrimPrefix(year, yearsDir)
+	yearsFolder, _ := filepath.Glob(globPath)
+	var years []string
+	for _, year := range yearsFolder {
+		years = append([]string{strings.TrimPrefix(year, yearsDir)}, years...)
+	}
+
+	styles, err := getCss("public/user.css")
+	if err != nil {
+		returnError(w, http.StatusInternalServerError, err.Error())
+		return
 	}
 
 	pageData := UserPage{
-		User:  user,
-		Years: years,
+		User:   user,
+		Years:  years,
+		Styles: styles,
 	}
 
-	err := tmpl.ExecuteTemplate(w, "user.html", pageData)
+	err = tmpl.ExecuteTemplate(w, "user.html", pageData)
 	if err != nil {
 		returnError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -300,16 +284,17 @@ func postHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// base64, err = GenerateThumbnail(li.Cur)
-	// if err != nil {
-	// 	returnError(w, http.StatusInternalServerError, err.Error())
-	// 	return
-	// }
+	styles, err := getCss("public/post.css")
+	if err != nil {
+		returnError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
 
-	post := Post{
-		Year:  year,
-		User:  user,
-		Image: li,
+	post := PostPage{
+		Year:   year,
+		User:   user,
+		Image:  li,
+		Styles: styles,
 	}
 
 	err = tmpl.ExecuteTemplate(w, "post.html", post)
@@ -336,13 +321,20 @@ func yearHandler(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		images = append(images, Media{Name: f.Name()})
+		images = append(images, makeMedia(f.Name(), user, year))
 	}
 
-	gallery := Gallery{
+	styles, err := getCss("public/year.css")
+	if err != nil {
+		returnError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	gallery := YearPage{
 		Year:   year,
 		User:   user,
 		Images: images,
+		Styles: styles,
 	}
 
 	err = tmpl.ExecuteTemplate(w, "year.html", gallery)
@@ -350,4 +342,20 @@ func yearHandler(w http.ResponseWriter, r *http.Request) {
 		returnError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+}
+
+func main() {
+	r := mux.NewRouter()
+
+	fs := http.FileServer(http.Dir("public"))
+	r.PathPrefix("/gallery/assets/").Handler(http.StripPrefix("/gallery/assets/", fs))
+
+	r.HandleFunc("/gallery", indexHandler)
+	r.HandleFunc("/gallery/{user}", userHandler)
+	r.HandleFunc("/gallery/{user}/{year}", yearHandler)
+	r.HandleFunc("/gallery/{user}/{year}/{id}", postHandler)
+
+	address := "localhost:8080"
+	fmt.Printf("Listening on %s\n", address)
+	http.ListenAndServe(address, trimTrailingSlash(r))
 }

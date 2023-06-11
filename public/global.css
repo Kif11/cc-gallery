@@ -1,0 +1,37 @@
+@font-face {
+    font-family: "UbuntuMono";
+    src: url("fonts/UbuntuMono-Regular.ttf");
+}
+
+body {
+    font-family: UbuntuMono, monospace;
+    margin: 0;
+    padding: 0;
+    font-size: 14px;
+}
+
+@media (prefers-color-scheme: light) {
+    a {
+        color: black;
+    }
+}
+
+@media (prefers-color-scheme: dark) {
+    body {
+        background-color: rgb(25, 25, 25);
+        color: rgb(230, 230, 230)
+    }
+
+    a {
+        color: rgb(230, 230, 230)
+    }
+
+    img {
+        opacity: .75;
+        transition: opacity .5s ease-in-out;
+    }
+
+    img:hover {
+        opacity: 1;
+    }
+}

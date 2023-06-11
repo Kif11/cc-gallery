@@ -4,12 +4,18 @@
     <meta charset="UTF-8" />
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Codercat Gallery</title>
+    <title>{{.User}} gallery</title>
+    <style>
+      {{.Styles}}
+    </style>
   </head>
   <body>
-    <h1>{{.User}} Gallery</h1>
-    {{range .Years}}
-    <a href="/gallery/{{$.User}}/{{.}}">{{.}}</a><br />
-    {{end}}
+    <div class="grid">
+      {{range .Years}}
+      <a class="cell" href="/gallery/{{$.User}}/{{.}}">
+        <h2>{{.}}</h2>
+      </a>
+      {{end}}
+    </div>
   </body>
 </html>

@@ -4,45 +4,21 @@
     <meta charset="UTF-8" />
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>{{.Year}} Gallery</title>
+    <title>{{.Year}} gallery</title>
     <style>
-      body {
-        font-family: Arial, sans-serif;
-      }
-      
-      .gallery {
-        display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-      }
-      
-      .gallery .image {
-        width: 100%;
-        height: 0;
-        padding-bottom: 100%; /* This makes the cell square */
-        position: relative;
-        overflow: hidden;
-      }
-
-      img,
-      video {
-        position: absolute;
-        width: 100%;
-        height: 100%;
-        object-fit: cover;
-        object-position: center;
-      }
+      {{.Styles}}
     </style>
   </head>
   <body>
-    <a class="back" href="/gallery/">Back</a>
+    <a class="back" href="/gallery/{{.User}}">Back</a>
     <div class="gallery">
       {{range .Images}}
       <div class="image">
-        <a href="/gallery/{{$.User}}/{{$.Year}}/{{getFileName .Name}}">
+        <a href="{{.PageLink}}">
           {{if isImage .Name}}
-          <img class="lazy" src="" data-url="/gallery/assets/{{$.User}}/{{$.Year}}/{{.Name}}" />
+          <img class="lazy" src="" data-url="{{.PublicPath}}" />
           {{else if isVideo .Name}}
-          <video class="lazy" src="" data-url="/gallery/assets/{{$.User}}/{{$.Year}}/{{.Name}}" muted autoplay loop controls />
+          <video class="lazy" src="" data-url="{{.PublicPath}}" muted autoplay loop controls />
           {{end}}
         </a>
       </div>

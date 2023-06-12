@@ -1,21 +1,16 @@
 package main
 
 import (
-	"embed"
 	"fmt"
 	"html/template"
+	"io/ioutil"
+	"log"
 	"net/http"
 	"os"
 	"path"
 	"path/filepath"
 	"strings"
-
-	"github.com/gorilla/mux"
 )
-
-//go:embed pages/*.html
-//go:embed public/*.css
-var content embed.FS
 
 var mediaDir = "public/media"
 
@@ -24,7 +19,7 @@ var funcs = template.FuncMap{
 	"isVideo": isVideo,
 }
 
-var tmpl *template.Template = template.Must(template.New("").Funcs(funcs).ParseFS(content, "pages/*.html"))
+var tmpl *template.Template = template.Must(template.New("").Funcs(funcs).ParseGlob("pages/gallery/*.html"))
 
 type MediaType int64
 
@@ -108,13 +103,28 @@ func trimTrailingSlash(next http.Handler) http.Handler {
 	})
 }
 
+func readFile(path string) ([]byte, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return []byte{}, err
+	}
+	defer file.Close()
+
+	bytes, err := ioutil.ReadAll(file)
+	if err != nil {
+		return bytes, err
+	}
+
+	return bytes, nil
+}
+
 func getCss(path string) (template.CSS, error) {
-	css, err := content.ReadFile(path)
+	css, err := readFile(path)
 	if err != nil {
 		return "", err
 	}
 
-	globalCss, err := content.ReadFile("public/global.css")
+	globalCss, err := readFile("public/global.css")
 	if err != nil {
 		return "", err
 	}
@@ -139,7 +149,7 @@ func makeMedia(fileName string, user string, year string) Media {
 	return Media{
 		Type:       getMediaType(fileName),
 		Name:       fileName,
-		PublicPath: path.Join("/", "gallery", "assets", "media", user, year, fileName),
+		PublicPath: path.Join("/", "assets", "media", user, year, fileName),
 		PageLink:   path.Join("/", "gallery", user, year, stripExtension(fileName)),
 	}
 }
@@ -157,7 +167,6 @@ func listDirs(path string) ([]string, error) {
 	// Read the directory entries
 	entries, err := f.Readdir(-1)
 	if err != nil {
-		fmt.Println("Error reading directory:", err)
 		return dirNames, err
 	}
 
@@ -223,7 +232,7 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 		users[i] = strings.TrimPrefix(user, mediaDir)
 	}
 
-	styles, err := getCss("public/index.css")
+	styles, err := getCss("public/gallery/index.css")
 	if err != nil {
 		returnError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -241,121 +250,151 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func userHandler(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	user := vars["user"]
+type RequestHandler = func(w http.ResponseWriter, r *http.Request)
 
-	yearsDir := fmt.Sprintf("%s/%s/", mediaDir, user)
-	globPath := fmt.Sprintf("%s*", yearsDir)
-	yearsFolder, _ := filepath.Glob(globPath)
-	var years []string
-	for _, year := range yearsFolder {
-		years = append([]string{strings.TrimPrefix(year, yearsDir)}, years...)
-	}
-
-	styles, err := getCss("public/user.css")
-	if err != nil {
-		returnError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-
-	pageData := UserPage{
-		User:   user,
-		Years:  years,
-		Styles: styles,
-	}
-
-	err = tmpl.ExecuteTemplate(w, "user.html", pageData)
-	if err != nil {
-		returnError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-}
-
-func postHandler(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	id := vars["id"]
-	year := vars["year"]
-	user := vars["user"]
-
-	li, err := findImage(user, year, id)
-	if err != nil {
-		returnError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-
-	styles, err := getCss("public/post.css")
-	if err != nil {
-		returnError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-
-	post := PostPage{
-		Year:   year,
-		User:   user,
-		Image:  li,
-		Styles: styles,
-	}
-
-	err = tmpl.ExecuteTemplate(w, "post.html", post)
-	if err != nil {
-		returnError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-}
-
-func yearHandler(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	year := vars["year"]
-	user := vars["user"]
-	var images []Media
-
-	files, err := os.ReadDir(path.Join(mediaDir, user, year))
-	if err != nil {
-		returnError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-
-	for _, f := range files {
-		if strings.Contains(f.Name(), "100x100") {
-			continue
+func makeUserHandler(user string) RequestHandler {
+	return func(w http.ResponseWriter, r *http.Request) {
+		yearsDir := fmt.Sprintf("%s/%s/", mediaDir, user)
+		globPath := fmt.Sprintf("%s*", yearsDir)
+		yearsFolder, _ := filepath.Glob(globPath)
+		var years []string
+		for _, year := range yearsFolder {
+			years = append([]string{strings.TrimPrefix(year, yearsDir)}, years...)
 		}
 
-		images = append(images, makeMedia(f.Name(), user, year))
-	}
+		styles, err := getCss("public/gallery/user.css")
+		if err != nil {
+			returnError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
 
-	styles, err := getCss("public/year.css")
-	if err != nil {
-		returnError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
+		pageData := UserPage{
+			User:   user,
+			Years:  years,
+			Styles: styles,
+		}
 
-	gallery := YearPage{
-		Year:   year,
-		User:   user,
-		Images: images,
-		Styles: styles,
+		err = tmpl.ExecuteTemplate(w, "user.html", pageData)
+		if err != nil {
+			returnError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
 	}
+}
 
-	err = tmpl.ExecuteTemplate(w, "year.html", gallery)
-	if err != nil {
-		returnError(w, http.StatusInternalServerError, err.Error())
-		return
+func makePostHandler(user string, year string, id string) RequestHandler {
+	return func(w http.ResponseWriter, r *http.Request) {
+		li, err := findImage(user, year, id)
+		if err != nil {
+			returnError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+
+		styles, err := getCss("public/gallery/post.css")
+		if err != nil {
+			returnError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+
+		post := PostPage{
+			Year:   year,
+			User:   user,
+			Image:  li,
+			Styles: styles,
+		}
+
+		err = tmpl.ExecuteTemplate(w, "post.html", post)
+		if err != nil {
+			returnError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
 	}
+}
+
+func makeYearHandler(user string, year string) RequestHandler {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var images []Media
+
+		files, err := os.ReadDir(path.Join(mediaDir, user, year))
+		if err != nil {
+			returnError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+
+		for _, f := range files {
+			if strings.Contains(f.Name(), "100x100") {
+				continue
+			}
+
+			images = append(images, makeMedia(f.Name(), user, year))
+		}
+
+		styles, err := getCss("public/gallery/year.css")
+		if err != nil {
+			returnError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+
+		gallery := YearPage{
+			Year:   year,
+			User:   user,
+			Images: images,
+			Styles: styles,
+		}
+
+		err = tmpl.ExecuteTemplate(w, "year.html", gallery)
+		if err != nil {
+			returnError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+	}
+}
+
+func galleryRootHandler(w http.ResponseWriter, r *http.Request) {
+	parts := strings.FieldsFunc(r.URL.Path, func(c rune) bool {
+		return c == '/'
+	})
+
+	/*
+		 Handle the following routes:
+			/
+			/{user}
+			/{user}/{year}
+			/{user}/{year}/{media_id}
+	*/
+
+	switch len(parts) {
+	case 0:
+		indexHandler(w, r)
+	case 1:
+		makeUserHandler(parts[0])(w, r)
+	case 2:
+		makeYearHandler(parts[0], parts[1])(w, r)
+	case 3:
+		makePostHandler(parts[0], parts[1], parts[2])(w, r)
+	}
+}
+
+func rootHandler(w http.ResponseWriter, r *http.Request) {
+	fmt.Fprintf(w, "hello\n")
 }
 
 func main() {
-	r := mux.NewRouter()
+	mux := http.NewServeMux()
+	galleryMux := http.NewServeMux()
 
+	// Handle public assets from public directory under example.com/assets URL
 	fs := http.FileServer(http.Dir("public"))
-	r.PathPrefix("/gallery/assets/").Handler(http.StripPrefix("/gallery/assets/", fs))
+	mux.Handle("/assets/", http.StripPrefix("/assets", fs))
 
-	r.HandleFunc("/gallery", indexHandler)
-	r.HandleFunc("/gallery/{user}", userHandler)
-	r.HandleFunc("/gallery/{user}/{year}", yearHandler)
-	r.HandleFunc("/gallery/{user}/{year}/{id}", postHandler)
+	// Configure gallery mux
+	galleryMux.HandleFunc("/", galleryRootHandler)
+
+	// Configure main mux
+	mux.Handle("/gallery/", http.StripPrefix("/gallery", galleryMux))
+	mux.HandleFunc("/", rootHandler)
 
 	address := "localhost:8080"
 	fmt.Printf("Listening on %s\n", address)
-	http.ListenAndServe(address, trimTrailingSlash(r))
+	log.Fatal(http.ListenAndServe(address, mux))
 }

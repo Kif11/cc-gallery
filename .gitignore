@@ -1,4 +1,5 @@
-gallery2
-gallery
+/gallery2
+/gallery
 media
 .DS_*
+settings.json

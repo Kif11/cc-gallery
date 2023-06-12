@@ -185,7 +185,7 @@ func findImage(user string, year string, fileName string) (LinkedMedia, error) {
 
 	files, err := os.ReadDir(path.Join(mediaDir, user, year))
 	if err != nil {
-		return li, nil
+		return li, err
 	}
 
 	for i := 0; i < len(files); i++ {
@@ -256,7 +256,14 @@ func makeUserHandler(user string) RequestHandler {
 	return func(w http.ResponseWriter, r *http.Request) {
 		yearsDir := fmt.Sprintf("%s/%s/", mediaDir, user)
 		globPath := fmt.Sprintf("%s*", yearsDir)
+
 		yearsFolder, _ := filepath.Glob(globPath)
+
+		if len(yearsFolder) == 0 {
+			returnError(w, http.StatusNotFound, "Not Found")
+			return
+		}
+
 		var years []string
 		for _, year := range yearsFolder {
 			years = append([]string{strings.TrimPrefix(year, yearsDir)}, years...)
@@ -286,7 +293,7 @@ func makePostHandler(user string, year string, id string) RequestHandler {
 	return func(w http.ResponseWriter, r *http.Request) {
 		li, err := findImage(user, year, id)
 		if err != nil {
-			returnError(w, http.StatusInternalServerError, err.Error())
+			returnError(w, http.StatusNotFound, "Not Found")
 			return
 		}
 
@@ -315,9 +322,11 @@ func makeYearHandler(user string, year string) RequestHandler {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var images []Media
 
-		files, err := os.ReadDir(path.Join(mediaDir, user, year))
+		mediaPath := path.Join(mediaDir, user, year)
+
+		files, err := os.ReadDir(mediaPath)
 		if err != nil {
-			returnError(w, http.StatusInternalServerError, err.Error())
+			returnError(w, http.StatusNotFound, "Not Found")
 			return
 		}
 

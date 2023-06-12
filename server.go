@@ -250,9 +250,7 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-type RequestHandler = func(w http.ResponseWriter, r *http.Request)
-
-func makeUserHandler(user string) RequestHandler {
+func makeUserHandler(user string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		yearsDir := fmt.Sprintf("%s/%s/", mediaDir, user)
 		globPath := fmt.Sprintf("%s*", yearsDir)
@@ -289,7 +287,7 @@ func makeUserHandler(user string) RequestHandler {
 	}
 }
 
-func makePostHandler(user string, year string, id string) RequestHandler {
+func makePostHandler(user string, year string, id string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		li, err := findImage(user, year, id)
 		if err != nil {
@@ -318,7 +316,7 @@ func makePostHandler(user string, year string, id string) RequestHandler {
 	}
 }
 
-func makeYearHandler(user string, year string) RequestHandler {
+func makeYearHandler(user string, year string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var images []Media
 

@@ -33,6 +33,10 @@ type MediaList struct {
 	Media []Media `json:"media"`
 }
 
+type IgTvMedia struct {
+	IgTvMedia []MediaList `json:"ig_igtv_media"`
+}
+
 func listDirs(path string) ([]string, error) {
 	var dirNames []string
 
@@ -60,7 +64,8 @@ func listDirs(path string) ([]string, error) {
 	return dirNames, nil
 }
 
-var baseDir = "../instagram_data"
+var srcMetadataDir = "/Users/kif/pr/instagram_data"
+var destinationDir = "/Users/kif/pr/gallery2/public/media"
 
 func copyFile(srcPath, dstPath string) error {
 	srcFile, err := os.Open(srcPath)
@@ -95,23 +100,45 @@ func fileExists(path string) (bool, error) {
 	return false, err
 }
 
-func processUserMedia(user string) {
-	postsFile := fmt.Sprintf("../instagram_data/%s/content/posts_1.json", user)
-	file, _ := os.Open(postsFile)
+func readJson(jsonFile string, target any) error {
+	file, _ := os.Open(jsonFile)
 	defer file.Close()
 
 	decoder := json.NewDecoder(file)
+
+	err := decoder.Decode(target)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func processUserMedia(user string) {
+	// Read posts metadata
+	postsFile := fmt.Sprintf("%s/%s/content/posts_1.json", srcMetadataDir, user)
 	mediaList := []MediaList{}
 
-	err := decoder.Decode(&mediaList)
+	err := readJson(postsFile, &mediaList)
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
 
+	// Read IgTv metadata
+	igTvFile := fmt.Sprintf("%s/%s/content/igtv_videos.json", srcMetadataDir, user)
+	igTvList := IgTvMedia{}
+
+	err = readJson(igTvFile, &igTvList)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	allMediaList := append(mediaList, igTvList.IgTvMedia...)
 	newMedia := make(map[string][]Media)
 
-	for _, list := range mediaList {
+	for _, list := range allMediaList {
 		// Each post can have multiple images and videos
 		for idx, media := range list.Media {
 			// Convert the creation timestamp to a date
@@ -119,12 +146,12 @@ func processUserMedia(user string) {
 			unixTimestamp := strconv.Itoa(int(date.Unix()))
 
 			// Create the directory if it does not exist
-			dir := fmt.Sprintf("media/%s/%d", user, date.Year())
+			dir := fmt.Sprintf("%s/%s/%d", destinationDir, user, date.Year())
 			if _, err := os.Stat(dir); os.IsNotExist(err) {
 				os.MkdirAll(dir, 0755)
 			}
 
-			srcPath := filepath.Join(baseDir, user, media.URI)
+			srcPath := filepath.Join(srcMetadataDir, user, media.URI)
 			newFileName := fmt.Sprintf("%s_%d", unixTimestamp, idx)
 			dstPath := filepath.Join(dir, fmt.Sprintf("%s%s", newFileName, path.Ext(media.URI)))
 
@@ -137,6 +164,7 @@ func processUserMedia(user string) {
 				fmt.Println(err)
 				return
 			}
+
 			if !exists {
 				err := copyFile(srcPath, dstPath)
 				if err != nil {
@@ -185,7 +213,7 @@ func processUserMedia(user string) {
 }
 
 func main() {
-	users, err := listDirs(baseDir)
+	users, err := listDirs(srcMetadataDir)
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)

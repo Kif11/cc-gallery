@@ -14,6 +14,7 @@
     <div class="gallery">
       {{range .Images}}
       <div class="image">
+        <!-- <p>{{.PublicPath}}</p> -->
         <a href="{{.PageLink}}">
           {{if isImage .Name}}
           <img class="lazy" src="" data-url="{{.PublicPath}}" />

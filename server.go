@@ -9,6 +9,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"sort"
 	"strings"
 )
 
@@ -170,12 +171,16 @@ func listDirs(path string) ([]string, error) {
 		return dirNames, err
 	}
 
-	// Iterate over the entries and print the directories
+	// Pick directories only
 	for _, entry := range entries {
 		if entry.IsDir() {
 			dirNames = append(dirNames, entry.Name())
 		}
 	}
+
+	sort.Slice(dirNames, func(i, j int) bool {
+		return dirNames[i] < dirNames[j]
+	})
 
 	return dirNames, nil
 }
@@ -253,9 +258,8 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 func makeUserHandler(user string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		yearsDir := fmt.Sprintf("%s/%s/", mediaDir, user)
-		globPath := fmt.Sprintf("%s*", yearsDir)
 
-		yearsFolder, _ := filepath.Glob(globPath)
+		yearsFolder, _ := listDirs(yearsDir)
 
 		if len(yearsFolder) == 0 {
 			returnError(w, http.StatusNotFound, "Not Found")

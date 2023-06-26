@@ -1,5 +1,6 @@
 /gallery2
 /gallery
+/bin
 media
 .DS_*
 settings.json

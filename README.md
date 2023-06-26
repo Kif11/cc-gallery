@@ -1,7 +1,7 @@
 ## Nginx config
 
 ```nginx
-location /assets/ {
-    alias /home/kiko/gallery/;
+location /public/ {
+    root /home/kiko/gallery/;
 }
 ```

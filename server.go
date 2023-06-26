@@ -150,7 +150,7 @@ func makeMedia(fileName string, user string, year string) Media {
 	return Media{
 		Type:       getMediaType(fileName),
 		Name:       fileName,
-		PublicPath: path.Join("/", "assets", "media", user, year, fileName),
+		PublicPath: path.Join("/", "public", "media", user, year, fileName),
 		PageLink:   path.Join("/", "gallery", user, year, stripExtension(fileName)),
 	}
 }
@@ -393,10 +393,6 @@ func rootHandler(w http.ResponseWriter, r *http.Request) {
 func main() {
 	mux := http.NewServeMux()
 	galleryMux := http.NewServeMux()
-
-	// Handle public assets from public directory under example.com/assets URL
-	fs := http.FileServer(http.Dir("public"))
-	mux.Handle("/assets/", http.StripPrefix("/assets", fs))
 
 	// Configure gallery mux
 	galleryMux.HandleFunc("/", galleryRootHandler)

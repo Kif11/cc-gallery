@@ -51,12 +51,12 @@ type MediaMetadata struct {
 	} `json:"photo_metadata"`
 }
 
-type MediaType string
+type InstType string
 
 const (
-	Post  MediaType = "post"
-	IgTv  MediaType = "igtv"
-	Story MediaType = "story"
+	Post  InstType = "post"
+	IgTv  InstType = "igtv"
+	Story InstType = "story"
 )
 
 type Media struct {
@@ -65,7 +65,7 @@ type Media struct {
 	MediaMetadata     MediaMetadata `json:"media_metadata"`
 	Title             string        `json:"title"`
 	Index             int           // In case of multiple media per post represent the index of the media
-	Type              MediaType
+	Type              InstType
 	User              string
 }
 
@@ -184,7 +184,7 @@ func makeDstPath(media Media) string {
 	)
 }
 
-func hydrateMedia(media []Media, mediaType MediaType, user string) []Media {
+func hydrateMedia(media []Media, mediaType InstType, user string) []Media {
 	newMedia := []Media{}
 	for idx, v := range media {
 		v.Type = mediaType

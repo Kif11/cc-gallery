@@ -9,6 +9,7 @@ scp bin/gallery codercat:~/gallery/gallery
 
 # Sync assets
 rsync -avu -p --chmod=Du=rwx,Dg=rx,Do=rx,Fu=rw,Fg=r,Fo=r ./public/media/ codercat:~/gallery/public/media
+rsync -avu -p ./public/gallery/ codercat:~/gallery/public/gallery
 rsync -avu -p ./pages/ codercat:~/gallery/pages
 
 # Restart service

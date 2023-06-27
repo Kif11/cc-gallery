@@ -22,16 +22,16 @@ var funcs = template.FuncMap{
 
 var tmpl *template.Template = template.Must(template.New("").Funcs(funcs).ParseGlob("pages/gallery/*.html"))
 
-type MediaType int64
+type MediaFileType int64
 
 const (
-	Other           = -1
-	Image MediaType = iota
+	Other               = -1
+	Image MediaFileType = iota
 	Video
 )
 
 type Media struct {
-	Type       MediaType
+	Type       MediaFileType
 	Name       string
 	PublicPath string
 	PageLink   string
@@ -133,7 +133,7 @@ func getCss(path string) (template.CSS, error) {
 	return template.CSS(append(css, globalCss...)), nil
 }
 
-func getMediaType(filePath string) MediaType {
+func getMediaType(filePath string) MediaFileType {
 	ext := strings.ToLower(filepath.Ext(filePath))
 
 	switch ext {
@@ -255,7 +255,7 @@ func indexHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func makeUserHandler(user string) http.HandlerFunc {
+func userHandler(user string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		yearsDir := fmt.Sprintf("%s/%s/", mediaDir, user)
 
@@ -291,7 +291,7 @@ func makeUserHandler(user string) http.HandlerFunc {
 	}
 }
 
-func makePostHandler(user string, year string, id string) http.HandlerFunc {
+func postHandler(user string, year string, id string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		li, err := findImage(user, year, id)
 		if err != nil {
@@ -320,7 +320,7 @@ func makePostHandler(user string, year string, id string) http.HandlerFunc {
 	}
 }
 
-func makeYearHandler(user string, year string) http.HandlerFunc {
+func yearHandler(user string, year string, filter string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var images []Media
 
@@ -337,7 +337,14 @@ func makeYearHandler(user string, year string) http.HandlerFunc {
 				continue
 			}
 
-			images = append(images, makeMedia(f.Name(), user, year))
+			if filter == "" {
+				images = append(images, makeMedia(f.Name(), user, year))
+				continue
+			}
+
+			if strings.Contains(f.Name(), filter) {
+				images = append(images, makeMedia(f.Name(), user, year))
+			}
 		}
 
 		styles, err := getCss("public/gallery/year.css")
@@ -378,11 +385,12 @@ func galleryRootHandler(w http.ResponseWriter, r *http.Request) {
 	case 0:
 		indexHandler(w, r)
 	case 1:
-		makeUserHandler(parts[0])(w, r)
+		userHandler(parts[0])(w, r)
 	case 2:
-		makeYearHandler(parts[0], parts[1])(w, r)
+		mediaType := r.URL.Query().Get("filter")
+		yearHandler(parts[0], parts[1], mediaType)(w, r)
 	case 3:
-		makePostHandler(parts[0], parts[1], parts[2])(w, r)
+		postHandler(parts[0], parts[1], parts[2])(w, r)
 	}
 }
 

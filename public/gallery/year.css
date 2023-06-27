@@ -16,6 +16,19 @@ body {
     overflow: hidden;
 }
 
+.controlls {
+    display: flex;
+    padding: 10px;
+}
+
+.controlls a {
+    line-height: 20px;
+}
+
+.controlls form {
+    margin: 0 0 0 20px;
+}
+
 img,
 video {
     position: absolute;

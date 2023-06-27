@@ -51,11 +51,22 @@ type MediaMetadata struct {
 	} `json:"photo_metadata"`
 }
 
+type MediaType string
+
+const (
+	Post  MediaType = "post"
+	IgTv  MediaType = "igtv"
+	Story MediaType = "story"
+)
+
 type Media struct {
 	URI               string        `json:"uri"`
 	CreationTimestamp int64         `json:"creation_timestamp"`
 	MediaMetadata     MediaMetadata `json:"media_metadata"`
 	Title             string        `json:"title"`
+	Index             int           // In case of multiple media per post represent the index of the media
+	Type              MediaType
+	User              string
 }
 
 type MediaList struct {
@@ -155,13 +166,13 @@ func cleanPath(path string) string {
 	return path
 }
 
-func makeDstPath(media Media, user string, idx int) string {
+func makeDstPath(media Media) string {
 	date := time.Unix(media.CreationTimestamp, 0)
 	unixTimestamp := strconv.Itoa(int(date.Unix()))
-	fileName := fmt.Sprintf("%s_%d", unixTimestamp, idx)
+	fileName := fmt.Sprintf("%s_%s_%d", media.Type, unixTimestamp, media.Index)
 
 	// Create the directory if it does not exist
-	dir := fmt.Sprintf("%s/%s/%d", destinationDir, user, date.Year())
+	dir := fmt.Sprintf("%s/%s/%d", destinationDir, media.User, date.Year())
 	if _, err := os.Stat(dir); os.IsNotExist(err) {
 		os.MkdirAll(dir, 0755)
 	}
@@ -171,6 +182,17 @@ func makeDstPath(media Media, user string, idx int) string {
 			dir,
 			fmt.Sprintf("%s%s", fileName, path.Ext(media.URI))),
 	)
+}
+
+func hydrateMedia(media []Media, mediaType MediaType, user string) []Media {
+	newMedia := []Media{}
+	for idx, v := range media {
+		v.Type = mediaType
+		v.Index = idx
+		v.User = user
+		newMedia = append(newMedia, v)
+	}
+	return newMedia
 }
 
 func processUserMedia(user string) {
@@ -208,29 +230,31 @@ func processUserMedia(user string) {
 
 	// Append post
 	for _, m := range mediaList {
-		allMedia = append(allMedia, m.Media...)
+		allMedia = append(allMedia, hydrateMedia(m.Media, Post, user)...)
 	}
 
 	// Append igTv
 	for _, m := range igTvList.IgTvMedia {
-		allMedia = append(allMedia, m.Media...)
+		allMedia = append(allMedia, hydrateMedia(m.Media, IgTv, user)...)
 	}
 
 	// Append stories
-	allMedia = append(allMedia, stories.IGStories...)
+	allMedia = append(allMedia, hydrateMedia(stories.IGStories, Story, user)...)
 
 	// Debug
 	// for i, v := range allMedia {
-	// 	fmt.Println(i, v)
+	// 	if i < 100 {
+	// 		fmt.Printf("Idx: %d, %+v\n", i, v)
+	// 	}
 	// }
 	// os.Exit(0)
 
 	newMedia := make(map[string][]Media)
 
 	// Each post can have multiple images and videos
-	for idx, media := range allMedia {
+	for _, media := range allMedia {
 		srcPath := filepath.Join(srcMetadataDir, user, media.URI)
-		dstPath := makeDstPath(media, user, idx)
+		dstPath := makeDstPath(media)
 
 		exists, err := fileExists(dstPath)
 		if err != nil {

@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>{{.Year}} gallery</title>
     <style>
-      {{.Styles}}
+       {{.Styles}}
     </style>
   </head>
   <body>
@@ -19,14 +19,14 @@
           {{if isImage .Name}}
           <img class="lazy" src="" data-url="{{.PublicPath}}" />
           {{else if isVideo .Name}}
-          <video class="lazy" src="" data-url="{{.PublicPath}}" muted autoplay loop controls />
+          <video class="lazy" src="" data-url="{{.PublicPath}}" muted autoplay loop />
           {{end}}
         </a>
       </div>
       {{end}}
     </div>
     <script>
-      const backLink = document.querySelector('.back');
+      const backLink = document.querySelector(".back");
 
       document.addEventListener("keydown", (e) => {
         if (e.keyCode == "37") {
@@ -35,7 +35,7 @@
           // right
         } else if (e.keyCode == "38") {
           // up
-          backLink.click()
+          backLink.click();
         }
       });
 
@@ -57,6 +57,31 @@
           });
         }
       });
+
+      (function preserveScrollPosition() {
+        document.querySelectorAll("a").forEach(function (link) {
+          link.addEventListener("click", function () {
+            sessionStorage.setItem("scrollPos", window.pageYOffset);
+          });
+        });
+
+        // Restore scroll position on back navigation
+        window.addEventListener("popstate", function (event) {
+          if (event.state && event.state.scrollPos) {
+            window.scrollTo(0, event.state.scrollPos);
+          }
+        });
+
+        // Restore scroll position when the new page loads
+        window.addEventListener("load", function () {
+          var scrollPos = sessionStorage.getItem("scrollPos");
+          if (scrollPos) {
+            window.scrollTo(0, scrollPos);
+            sessionStorage.removeItem("scrollPos");
+          }
+        });
+      })()
+
     </script>
   </body>
 </html>

@@ -394,6 +394,10 @@ func main() {
 	mux := http.NewServeMux()
 	galleryMux := http.NewServeMux()
 
+	// Handle public assets from public directory under example.com/assets URL
+	fs := http.FileServer(http.Dir("public"))
+	mux.Handle("/public/", http.StripPrefix("/public", fs))
+
 	// Configure gallery mux
 	galleryMux.HandleFunc("/", galleryRootHandler)
 

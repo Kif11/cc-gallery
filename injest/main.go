@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"path"
 	"path/filepath"
@@ -13,11 +12,41 @@ import (
 	"time"
 )
 
+type PhotoMetadata struct {
+	ExifData []struct {
+		ISO               int    `json:"iso"`
+		FocalLength       string `json:"focal_length"`
+		LensModel         string `json:"lens_model"`
+		SceneCaptureType  string `json:"scene_capture_type"`
+		Software          string `json:"software"`
+		DeviceID          string `json:"device_id"`
+		SceneType         int    `json:"scene_type"`
+		CameraPosition    string `json:"camera_position"`
+		LensMake          string `json:"lens_make"`
+		DateTimeDigitized string `json:"date_time_digitized"`
+		DateTimeOriginal  string `json:"date_time_original"`
+		SourceType        string `json:"source_type"`
+		Aperture          string `json:"aperture"`
+		ShutterSpeed      string `json:"shutter_speed"`
+		MeteringMode      string `json:"metering_mode"`
+	} `json:"exif_data"`
+}
+
+type VideoMetadata struct {
+	ExifData []struct {
+		DeviceID         string `json:"device_id"`
+		DateTimeOriginal string `json:"date_time_original"`
+		SourceType       string `json:"source_type"`
+	} `json:"exif_data"`
+}
+
 type MediaMetadata struct {
 	PhotoMetadata struct {
 		ExifData []struct {
-			Latitude  float64 `json:"latitude"`
-			Longitude float64 `json:"longitude"`
+			Latitude      float64 `json:"latitude"`
+			Longitude     float64 `json:"longitude"`
+			PhotoMetadata `json:"photo_metadata,omitempty"`
+			VideoMetadata `json:"video_metadata,omitempty"`
 		} `json:"exif_data"`
 	} `json:"photo_metadata"`
 }
@@ -35,6 +64,10 @@ type MediaList struct {
 
 type IgTvMedia struct {
 	IgTvMedia []MediaList `json:"ig_igtv_media"`
+}
+
+type Stories struct {
+	IGStories []Media `json:"ig_stories"`
 }
 
 func listDirs(path string) ([]string, error) {
@@ -114,6 +147,32 @@ func readJson(jsonFile string, target any) error {
 	return nil
 }
 
+func cleanPath(path string) string {
+	if filepath.Ext(path) == "" {
+		return fmt.Sprintf("%s%s", path, ".mp4")
+	}
+
+	return path
+}
+
+func makeDstPath(media Media, user string, idx int) string {
+	date := time.Unix(media.CreationTimestamp, 0)
+	unixTimestamp := strconv.Itoa(int(date.Unix()))
+	fileName := fmt.Sprintf("%s_%d", unixTimestamp, idx)
+
+	// Create the directory if it does not exist
+	dir := fmt.Sprintf("%s/%s/%d", destinationDir, user, date.Year())
+	if _, err := os.Stat(dir); os.IsNotExist(err) {
+		os.MkdirAll(dir, 0755)
+	}
+
+	return cleanPath(
+		filepath.Join(
+			dir,
+			fmt.Sprintf("%s%s", fileName, path.Ext(media.URI))),
+	)
+}
+
 func processUserMedia(user string) {
 	// Read posts metadata
 	postsFile := fmt.Sprintf("%s/%s/content/posts_1.json", srcMetadataDir, user)
@@ -135,81 +194,73 @@ func processUserMedia(user string) {
 		return
 	}
 
-	allMediaList := append(mediaList, igTvList.IgTvMedia...)
+	// Process stories
+	storiesFile := fmt.Sprintf("%s/%s/content/stories.json", srcMetadataDir, user)
+	stories := Stories{}
+
+	err = readJson(storiesFile, &stories)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	allMedia := []Media{}
+
+	// Append post
+	for _, m := range mediaList {
+		allMedia = append(allMedia, m.Media...)
+	}
+
+	// Append igTv
+	for _, m := range igTvList.IgTvMedia {
+		allMedia = append(allMedia, m.Media...)
+	}
+
+	// Append stories
+	allMedia = append(allMedia, stories.IGStories...)
+
+	// Debug
+	// for i, v := range allMedia {
+	// 	fmt.Println(i, v)
+	// }
+	// os.Exit(0)
+
 	newMedia := make(map[string][]Media)
 
-	for _, list := range allMediaList {
-		// Each post can have multiple images and videos
-		for idx, media := range list.Media {
-			// Convert the creation timestamp to a date
-			date := time.Unix(media.CreationTimestamp, 0)
-			unixTimestamp := strconv.Itoa(int(date.Unix()))
+	// Each post can have multiple images and videos
+	for idx, media := range allMedia {
+		srcPath := filepath.Join(srcMetadataDir, user, media.URI)
+		dstPath := makeDstPath(media, user, idx)
 
-			// Create the directory if it does not exist
-			dir := fmt.Sprintf("%s/%s/%d", destinationDir, user, date.Year())
-			if _, err := os.Stat(dir); os.IsNotExist(err) {
-				os.MkdirAll(dir, 0755)
-			}
-
-			srcPath := filepath.Join(srcMetadataDir, user, media.URI)
-			newFileName := fmt.Sprintf("%s_%d", unixTimestamp, idx)
-			dstPath := filepath.Join(dir, fmt.Sprintf("%s%s", newFileName, path.Ext(media.URI)))
-
-			if filepath.Ext(dstPath) == "" {
-				dstPath = fmt.Sprintf("%s%s", dstPath, ".mp4")
-			}
-
-			exists, err := fileExists(dstPath)
-			if err != nil {
-				fmt.Println(err)
-				return
-			}
-
-			if !exists {
-				err := copyFile(srcPath, dstPath)
-				if err != nil {
-					fmt.Println(err)
-				}
-			}
-
-			key := fmt.Sprintf("%s/%s/%d", "media", user, date.Year())
-			newMedia[key] = append(newMedia[key], media)
-
-			// // Generate a thumbnail for images
-			// if filepath.Ext(media.URI) == ".jpg" {
-			// 	srcFile.Seek(0, 0) // reset the read pointer
-			// 	img, _, err := image.Decode(srcFile)
-			// 	if err != nil {
-			// 		fmt.Println(err)
-			// 		continue
-			// 	}
-
-			// 	thumb := resize.Thumbnail(100, 100, img, resize.Lanczos3)
-			// 	thumbPath := filepath.Join(dir, fmt.Sprintf("%s_100x100.jpg", unixTimestamp))
-			// 	thumbFile, err := os.Create(thumbPath)
-			// 	if err != nil {
-			// 		fmt.Println(err)
-			// 		continue
-			// 	}
-			// 	defer thumbFile.Close()
-
-			// 	jpeg.Encode(thumbFile, thumb, &jpeg.Options{Quality: 80})
-			// }
+		exists, err := fileExists(dstPath)
+		if err != nil {
+			fmt.Println(err)
+			return
 		}
 
-		for path, media := range newMedia {
-			file, err := json.MarshalIndent(media, "", " ")
+		if !exists {
+			err := copyFile(srcPath, dstPath)
 			if err != nil {
 				fmt.Println(err)
-				os.Exit(1)
-			}
-			err = ioutil.WriteFile(fmt.Sprintf("%s.json", path), file, 0644)
-			if err != nil {
-				fmt.Println(err)
-				os.Exit(1)
 			}
 		}
+
+		newMedia[dstPath] = append(newMedia[dstPath], media)
 	}
+
+	// for path, media := range newMedia {
+	// 	file, err := json.MarshalIndent(media, "", " ")
+	// 	if err != nil {
+	// 		fmt.Println(err)
+	// 		os.Exit(1)
+	// 	}
+
+	// 	err = ioutil.WriteFile(fmt.Sprintf("%s.json", path), file, 0644)
+	// 	if err != nil {
+	// 		fmt.Println(err)
+	// 		os.Exit(1)
+	// 	}
+	// }
 }
 
 func main() {

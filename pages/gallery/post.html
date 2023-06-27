@@ -5,11 +5,18 @@
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Post</title>
-    <style>
-      {{.Styles}}
-    </style>
+    <style>{{.Styles}}</style>
   </head>
   <body>
+    <details class="hotkeys">
+      <summary>Hotkeys</summary>
+      <ul>
+        <li>&larr; &rarr; - previous or next post</li>
+        <li>&uarr; - go back to the gallery</li>
+        <li>M - toggle sound on videos</li>
+      </ul>
+    </details>
+
     <div class="ct">
       <div class="main">
         {{if isImage .Image.Cur.Name}}
@@ -38,8 +45,10 @@
       const backLink = document.querySelector(".back");
       const nextLink = document.querySelector(".next");
       const prevLink = document.querySelector(".prev");
+      const videoEl = document.querySelector("video");
 
       document.addEventListener("keydown", (e) => {
+        console.log(e.code);
         if (e.keyCode == "37") {
           // left
           prevLink.click();
@@ -49,6 +58,8 @@
         } else if (e.keyCode == "38") {
           // up
           backLink.click();
+        } else if (e.code == "KeyM") {
+          videoEl.muted = !videoEl.muted;
         }
       });
     </script>

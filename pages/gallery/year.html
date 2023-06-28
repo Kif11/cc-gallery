@@ -14,7 +14,12 @@
       <a class="back" href="/gallery/{{.User}}">Back</a>
       <form id="filter" method="get">
         <label>Filter</label>
-        <input type="text" name="filter" placeholder="post, story, igtv, mp4, jpg" title="Filter media that contain provided filter in its name. Typical media name is story_12345_0.jpg which follow the template {type}_{unix_timestamp}_{index}.{ext}" />
+        <input
+          type="text"
+          name="filter"
+          placeholder="post, story, igtv, mp4, jpg"
+          title="Filter media that contain provided filter in its name. Typical media name is story_12345_0.jpg which follow the template {type}_{unix_timestamp}_{index}.{ext}"
+        />
         <button type="submit">Apply</button>
       </form>
     </section>
@@ -66,10 +71,10 @@
       });
 
       (function preserveScrollPosition() {
-        document.querySelectorAll("a").forEach(function (link) {
-          link.addEventListener("click", function () {
-            sessionStorage.setItem("scrollPos", window.pageYOffset);
-          });
+        // Save scroll position and query params when the page is unloaded (e.g., on reload)
+        window.addEventListener("beforeunload", function () {
+          sessionStorage.setItem("scrollPos", window.pageYOffset);
+          sessionStorage.setItem("queryParams", window.location.search);
         });
 
         // Restore scroll position on back navigation
@@ -81,7 +86,7 @@
 
         // Restore scroll position when the new page loads
         window.addEventListener("load", function () {
-          var scrollPos = sessionStorage.getItem("scrollPos");
+          const scrollPos = sessionStorage.getItem("scrollPos");
           if (scrollPos) {
             window.scrollTo(0, scrollPos);
             sessionStorage.removeItem("scrollPos");

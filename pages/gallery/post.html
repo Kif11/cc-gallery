@@ -5,7 +5,11 @@
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Post</title>
-    <style>{{.Styles}}</style>
+    <meta property="og:image" content="{{.Image.Cur.PublicPath}}">
+
+    <style>
+       {{.Styles}}
+    </style>
   </head>
   <body>
     <details class="hotkeys">
@@ -57,7 +61,11 @@
           nextLink.click();
         } else if (e.keyCode == "38") {
           // up
-          backLink.click();
+          const queryParams = sessionStorage.getItem("queryParams");
+          if (queryParams) {
+            window.location.replace("/gallery/{{.User}}/{{.Year}}/" + queryParams);
+            sessionStorage.removeItem("queryParams");
+          }
         } else if (e.code == "KeyM") {
           videoEl.muted = !videoEl.muted;
         }

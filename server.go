@@ -55,10 +55,11 @@ type UserPage struct {
 }
 
 type YearPage struct {
-	Year   string
-	User   string
-	Images []Media
-	Styles template.CSS
+	Year         string
+	User         string
+	Images       []Media
+	Styles       template.CSS
+	UserSettings UserSettings
 }
 
 type PostPage struct {
@@ -66,6 +67,19 @@ type PostPage struct {
 	User   string
 	Image  LinkedMedia
 	Styles template.CSS
+}
+
+type UserSettings struct {
+	GridSize string
+}
+
+var userSettings = map[string]UserSettings{
+	"kif": {
+		GridSize: "300px",
+	},
+	"snay": {
+		GridSize: "200px",
+	},
 }
 
 func isImage(file string) bool {
@@ -354,10 +368,11 @@ func yearHandler(user string, year string, filter string) http.HandlerFunc {
 		}
 
 		gallery := YearPage{
-			Year:   year,
-			User:   user,
-			Images: images,
-			Styles: styles,
+			Year:         year,
+			User:         user,
+			Images:       images,
+			Styles:       styles,
+			UserSettings: userSettings[user],
 		}
 
 		err = tmpl.ExecuteTemplate(w, "year.html", gallery)

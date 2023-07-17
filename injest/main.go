@@ -9,6 +9,7 @@ import (
 	"path"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -108,9 +109,6 @@ func listDirs(path string) ([]string, error) {
 	return dirNames, nil
 }
 
-var srcMetadataDir = "/Users/kif/pr/instagram_data"
-var destinationDir = "/Users/kif/pr/gallery2/public/media"
-
 func copyFile(srcPath, dstPath string) error {
 	srcFile, err := os.Open(srcPath)
 	if err != nil {
@@ -144,6 +142,18 @@ func fileExists(path string) (bool, error) {
 	return false, err
 }
 
+// Get file name without extension
+func fileName(path string) string {
+	fileName := filepath.Base(path)
+	extension := filepath.Ext(fileName)
+
+	if strings.HasPrefix(fileName, ".") {
+		extension = filepath.Ext(strings.TrimPrefix(fileName, "."))
+	}
+
+	return fileName[:len(fileName)-len(extension)]
+}
+
 func readJson(jsonFile string, target any) error {
 	file, _ := os.Open(jsonFile)
 	defer file.Close()
@@ -159,14 +169,19 @@ func readJson(jsonFile string, target any) error {
 }
 
 func cleanPath(path string) string {
-	if filepath.Ext(path) == "" {
+	switch filepath.Ext(path) {
+	case "":
+		// Instagram archive contains h264 encoded mp4 files with no extensions
 		return fmt.Sprintf("%s%s", path, ".mp4")
+	case ".heic":
+		// Instagram archive contains images with .heic extension that just JPGs
+		return fmt.Sprintf("%s/%s%s", filepath.Dir(path), fileName(path), ".jpg")
 	}
 
 	return path
 }
 
-func makeDstPath(media Media) string {
+func makeDstPath(media Media, destinationDir string) string {
 	date := time.Unix(media.CreationTimestamp, 0)
 	unixTimestamp := strconv.Itoa(int(date.Unix()))
 	fileName := fmt.Sprintf("%s_%s_%d", media.Type, unixTimestamp, media.Index)
@@ -195,9 +210,9 @@ func hydrateMedia(media []Media, mediaType InstType, user string) []Media {
 	return newMedia
 }
 
-func processUserMedia(user string) {
+func processUserMedia(user string, srcDir string, dstDir string) {
 	// Read posts metadata
-	postsFile := fmt.Sprintf("%s/%s/content/posts_1.json", srcMetadataDir, user)
+	postsFile := fmt.Sprintf("%s/%s/content/posts_1.json", srcDir, user)
 	mediaList := []MediaList{}
 
 	err := readJson(postsFile, &mediaList)
@@ -207,7 +222,7 @@ func processUserMedia(user string) {
 	}
 
 	// Read IgTv metadata
-	igTvFile := fmt.Sprintf("%s/%s/content/igtv_videos.json", srcMetadataDir, user)
+	igTvFile := fmt.Sprintf("%s/%s/content/igtv_videos.json", srcDir, user)
 	igTvList := IgTvMedia{}
 
 	err = readJson(igTvFile, &igTvList)
@@ -217,7 +232,7 @@ func processUserMedia(user string) {
 	}
 
 	// Process stories
-	storiesFile := fmt.Sprintf("%s/%s/content/stories.json", srcMetadataDir, user)
+	storiesFile := fmt.Sprintf("%s/%s/content/stories.json", srcDir, user)
 	stories := Stories{}
 
 	err = readJson(storiesFile, &stories)
@@ -253,8 +268,8 @@ func processUserMedia(user string) {
 
 	// Each post can have multiple images and videos
 	for _, media := range allMedia {
-		srcPath := filepath.Join(srcMetadataDir, user, media.URI)
-		dstPath := makeDstPath(media)
+		srcPath := filepath.Join(srcDir, user, media.URI)
+		dstPath := makeDstPath(media, dstDir)
 
 		exists, err := fileExists(dstPath)
 		if err != nil {
@@ -271,23 +286,18 @@ func processUserMedia(user string) {
 
 		newMedia[dstPath] = append(newMedia[dstPath], media)
 	}
-
-	// for path, media := range newMedia {
-	// 	file, err := json.MarshalIndent(media, "", " ")
-	// 	if err != nil {
-	// 		fmt.Println(err)
-	// 		os.Exit(1)
-	// 	}
-
-	// 	err = ioutil.WriteFile(fmt.Sprintf("%s.json", path), file, 0644)
-	// 	if err != nil {
-	// 		fmt.Println(err)
-	// 		os.Exit(1)
-	// 	}
-	// }
 }
 
 func main() {
+
+	if len(os.Args) < 3 {
+		fmt.Printf("Usage: ingest <instagram_data_dir> <destination_dir>\n")
+		os.Exit(0)
+	}
+
+	srcMetadataDir := os.Args[1]
+	destinationDir := os.Args[2]
+
 	users, err := listDirs(srcMetadataDir)
 	if err != nil {
 		fmt.Println(err)
@@ -295,6 +305,6 @@ func main() {
 	}
 
 	for _, user := range users {
-		processUserMedia(user)
+		processUserMedia(user, srcMetadataDir, destinationDir)
 	}
 }

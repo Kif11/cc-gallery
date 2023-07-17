@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"html/template"
 	"io"
+	"io/fs"
 	"log"
 	"net/http"
 	"os"
@@ -69,16 +70,26 @@ type PostPage struct {
 	Styles template.CSS
 }
 
+const (
+	NewFirst MediaOrder = "new_first"
+	OldFirst MediaOrder = "old_first"
+)
+
+type MediaOrder string
+
 type UserSettings struct {
-	GridSize string
+	GridSize   string
+	MediaOrder MediaOrder
 }
 
 var userSettings = map[string]UserSettings{
 	"kif": {
-		GridSize: "300px",
+		GridSize:   "300px",
+		MediaOrder: NewFirst,
 	},
 	"snay": {
-		GridSize: "200px",
+		GridSize:   "200px",
+		MediaOrder: NewFirst,
 	},
 }
 
@@ -207,8 +218,10 @@ func findImage(user string, year string, fileName string) (LinkedMedia, error) {
 		return li, err
 	}
 
-	for i := 0; i < len(files); i++ {
-		f := files[i]
+	sortedMedia := sortMedia(files, userSettings[user].MediaOrder)
+
+	for i := 0; i < len(sortedMedia); i++ {
+		f := sortedMedia[i]
 
 		if stripExtension(f.Name()) != fileName {
 			continue
@@ -334,9 +347,29 @@ func postHandler(user string, year string, id string) http.HandlerFunc {
 	}
 }
 
+func sortMedia(files []fs.DirEntry, order MediaOrder) []fs.DirEntry {
+	sort.Slice(files, func(i, j int) bool {
+		// Extract time stamp from file names
+		parts1 := strings.Split(files[i].Name(), "_")
+		parts2 := strings.Split(files[j].Name(), "_")
+
+		switch order {
+		case NewFirst:
+			return parts1[1] > parts2[1]
+		case OldFirst:
+			return parts1[1] < parts2[1]
+		default:
+			return parts1[1] > parts2[1]
+		}
+	})
+
+	return files
+}
+
 func yearHandler(user string, year string, filter string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var images []Media
+		settings := userSettings[user]
 
 		mediaPath := path.Join(mediaDir, user, year)
 
@@ -346,11 +379,9 @@ func yearHandler(user string, year string, filter string) http.HandlerFunc {
 			return
 		}
 
-		for _, f := range files {
-			if strings.Contains(f.Name(), "100x100") {
-				continue
-			}
+		sortedMedia := sortMedia(files, settings.MediaOrder)
 
+		for _, f := range sortedMedia {
 			if filter == "" {
 				images = append(images, makeMedia(f.Name(), user, year))
 				continue

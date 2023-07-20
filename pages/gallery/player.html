@@ -37,7 +37,7 @@
         <a class="prev" href="{{.Image.Prev.PageLink}}">Prev</a>
         {{end}}
       </div>
-      <a class="back" href="/gallery/{{.User}}/{{.Year}}">Back</a>
+      <a class="back" href="/gallery/{{.BackLink}}">Back</a>
       <div class="right">
         {{if ne .Image.Next.Name ""}}
         <a class="next" href="{{.Image.Next.PageLink}}">Next</a>
@@ -63,7 +63,7 @@
           // up
           const queryParams = sessionStorage.getItem("queryParams");
           if (queryParams) {
-            window.location.replace("/gallery/{{.User}}/{{.Year}}/" + queryParams);
+            window.location.replace("/gallery/{{.BackLink}}/" + queryParams);
             sessionStorage.removeItem("queryParams");
           }
         } else if (e.code == "KeyM") {

@@ -4,20 +4,20 @@
     <meta charset="UTF-8" />
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>{{.Year}} gallery</title>
+    <title>{{.Path}} gallery</title>
     <style>
        {{.Styles}}
     </style>
     <style>
       .gallery {
         display: grid;
-        grid-template-columns: repeat(auto-fill, minmax({{.UserSettings.GridSize}}, 1fr));
+        grid-template-columns: repeat(auto-fill, minmax({{.PageSettings.GridSize}}, 1fr));
       }
     </style>
   </head>
   <body>
     <section class="controlls">
-      <a class="back" href="/gallery/{{.User}}">Back</a>
+      <a class="back" href="/gallery/{{.BackLink}}">Back</a>
       <form id="filter" method="get">
         <label>Filter</label>
         <input

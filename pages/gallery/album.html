@@ -4,15 +4,15 @@
     <meta charset="UTF-8" />
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>{{.User}} gallery</title>
+    <title>{{.Path}} gallery</title>
     <style>
       {{.Styles}}
     </style>
   </head>
   <body>
     <div class="grid">
-      {{range .Years}}
-      <a class="cell" href="/gallery/{{$.User}}/{{.}}">
+      {{range .Albums}}
+      <a class="cell" href="/gallery/{{$.Path}}/{{.}}">
         <h2>{{.}}</h2>
       </a>
       {{end}}

@@ -44,30 +44,26 @@ type LinkedMedia struct {
 	Next Media
 }
 
-type IndexPage struct {
-	Users  []string
-	Styles template.CSS
+type AlbumsPage struct {
+	Path     string
+	Albums   []string
+	BackLink string
+	Styles   template.CSS
 }
 
-type UserPage struct {
-	User   string
-	Years  []string
-	Styles template.CSS
-}
-
-type YearPage struct {
-	Year         string
-	User         string
+type GalleryPage struct {
+	Path         string
 	Images       []Media
+	BackLink     string
 	Styles       template.CSS
-	UserSettings UserSettings
+	PageSettings PageSettings
 }
 
-type PostPage struct {
-	Year   string
-	User   string
-	Image  LinkedMedia
-	Styles template.CSS
+type PlayerPage struct {
+	Path     string
+	Image    LinkedMedia
+	BackLink string
+	Styles   template.CSS
 }
 
 const (
@@ -77,20 +73,38 @@ const (
 
 type MediaOrder string
 
-type UserSettings struct {
+type PageSettings struct {
+	Path       string
 	GridSize   string
 	MediaOrder MediaOrder
 }
 
-var userSettings = map[string]UserSettings{
-	"kif": {
+var pageSettings = []PageSettings{
+	{
+		Path:       "kif",
 		GridSize:   "300px",
 		MediaOrder: NewFirst,
 	},
-	"snay": {
+	{
+		Path:       "snay",
 		GridSize:   "200px",
 		MediaOrder: NewFirst,
 	},
+}
+
+func pageSettingsForPath(p string, settings []PageSettings) PageSettings {
+	match := PageSettings{
+		GridSize:   "300px",
+		MediaOrder: NewFirst,
+	}
+
+	for _, s := range settings {
+		if strings.HasPrefix(p, s.Path) {
+			match = s
+		}
+	}
+
+	return match
 }
 
 func isImage(file string) bool {
@@ -111,22 +125,9 @@ func isVideo(file string) bool {
 	return false
 }
 
-func stripExtension(path string) string {
-	base := filepath.Base(path)
-	ext := filepath.Ext(base)
-	return strings.TrimSuffix(base, ext)
-}
-
-func returnError(w http.ResponseWriter, header int, msg string) {
+func writeError(w http.ResponseWriter, header int, msg string) {
 	w.WriteHeader(header)
 	w.Write([]byte(msg))
-}
-
-func trimTrailingSlash(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		r.URL.Path = strings.TrimSuffix(r.URL.Path, "/")
-		next.ServeHTTP(w, r)
-	})
 }
 
 func readFile(path string) ([]byte, error) {
@@ -171,12 +172,35 @@ func getMediaType(filePath string) MediaFileType {
 	}
 }
 
-func makeMedia(fileName string, user string, year string) Media {
+func sortMedia(files []fs.DirEntry, order MediaOrder) []fs.DirEntry {
+	sort.Slice(files, func(i, j int) bool {
+		// Extract time stamp from file names
+		parts1 := strings.Split(files[i].Name(), "_")
+		parts2 := strings.Split(files[j].Name(), "_")
+
+		if len(parts1) < 2 || len(parts2) < 2 {
+			return files[i].Name() < files[j].Name()
+		}
+
+		switch order {
+		case NewFirst:
+			return parts1[1] > parts2[1]
+		case OldFirst:
+			return parts1[1] < parts2[1]
+		default:
+			return parts1[1] > parts2[1]
+		}
+	})
+
+	return files
+}
+
+func makeMedia(fileName string, subPath string) Media {
 	return Media{
 		Type:       getMediaType(fileName),
 		Name:       fileName,
-		PublicPath: path.Join("/", "public", "media", user, year, fileName),
-		PageLink:   path.Join("/", "gallery", user, year, stripExtension(fileName)),
+		PublicPath: path.Join("/", "public", "media", subPath, fileName),
+		PageLink:   path.Join("/", "gallery", subPath, fileName),
 	}
 }
 
@@ -210,24 +234,27 @@ func listDirs(path string) ([]string, error) {
 	return dirNames, nil
 }
 
-func findImage(user string, year string, fileName string) (LinkedMedia, error) {
+func findImage(subPath string) (LinkedMedia, error) {
 	li := LinkedMedia{}
+	fileName := filepath.Base(subPath)
+	dir := path.Dir(subPath)
 
-	files, err := os.ReadDir(path.Join(mediaDir, user, year))
+	files, err := os.ReadDir(path.Join(mediaDir, dir))
 	if err != nil {
 		return li, err
 	}
 
-	sortedMedia := sortMedia(files, userSettings[user].MediaOrder)
+	settings := pageSettingsForPath(subPath, pageSettings)
+	sortedMedia := sortMedia(files, settings.MediaOrder)
 
 	for i := 0; i < len(sortedMedia); i++ {
 		f := sortedMedia[i]
 
-		if stripExtension(f.Name()) != fileName {
+		if f.Name() != fileName {
 			continue
 		}
 
-		li.Cur = makeMedia(f.Name(), user, year)
+		li.Cur = makeMedia(f.Name(), dir)
 
 		// Image found
 
@@ -237,14 +264,14 @@ func findImage(user string, year string, fileName string) (LinkedMedia, error) {
 
 		if i == 0 {
 			// First item
-			li.Next = makeMedia(files[i+1].Name(), user, year)
+			li.Next = makeMedia(files[i+1].Name(), dir)
 		} else if i == len(files)-1 {
 			// Last item
-			li.Prev = makeMedia(files[i-1].Name(), user, year)
+			li.Prev = makeMedia(files[i-1].Name(), dir)
 		} else {
 			// Middle item
-			li.Next = makeMedia(files[i+1].Name(), user, year)
-			li.Prev = makeMedia(files[i-1].Name(), user, year)
+			li.Next = makeMedia(files[i+1].Name(), dir)
+			li.Prev = makeMedia(files[i-1].Name(), dir)
 		}
 
 		return li, nil
@@ -253,129 +280,85 @@ func findImage(user string, year string, fileName string) (LinkedMedia, error) {
 	return li, fmt.Errorf("image with id %s not found", fileName)
 }
 
-func indexHandler(w http.ResponseWriter, r *http.Request) {
-	users, err := listDirs(mediaDir)
-	if err != nil {
-		returnError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-
-	for i, user := range users {
-		users[i] = strings.TrimPrefix(user, mediaDir)
-	}
-
-	styles, err := getCss("public/gallery/index.css")
-	if err != nil {
-		returnError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-
-	pageData := IndexPage{
-		Users:  users,
-		Styles: styles,
-	}
-
-	err = tmpl.ExecuteTemplate(w, "index.html", pageData)
-	if err != nil {
-		returnError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-}
-
-func userHandler(user string) http.HandlerFunc {
+// albumsHandler renders folders in given directory as albums
+func albumsHandler(subPath string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		yearsDir := fmt.Sprintf("%s/%s/", mediaDir, user)
+		dir := fmt.Sprintf("%s/%s/", mediaDir, subPath)
 
-		yearsFolder, _ := listDirs(yearsDir)
+		subFolders, _ := listDirs(dir)
 
-		if len(yearsFolder) == 0 {
-			returnError(w, http.StatusNotFound, "Not Found")
+		if len(subFolders) == 0 {
+			writeError(w, http.StatusNotFound, "Not Found")
 			return
 		}
 
-		var years []string
-		for _, year := range yearsFolder {
-			years = append([]string{strings.TrimPrefix(year, yearsDir)}, years...)
+		var albums []string
+		for _, year := range subFolders {
+			albums = append([]string{strings.TrimPrefix(year, dir)}, albums...)
 		}
 
-		styles, err := getCss("public/gallery/user.css")
+		styles, err := getCss("public/gallery/album.css")
 		if err != nil {
-			returnError(w, http.StatusInternalServerError, err.Error())
+			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
 
-		pageData := UserPage{
-			User:   user,
-			Years:  years,
-			Styles: styles,
+		pageData := AlbumsPage{
+			Path:     subPath,
+			Albums:   albums,
+			BackLink: path.Dir(subPath),
+			Styles:   styles,
 		}
 
-		err = tmpl.ExecuteTemplate(w, "user.html", pageData)
+		err = tmpl.ExecuteTemplate(w, "album.html", pageData)
 		if err != nil {
-			returnError(w, http.StatusInternalServerError, err.Error())
+			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
 	}
 }
 
-func postHandler(user string, year string, id string) http.HandlerFunc {
+// playerHandler render individual media on it's own page
+func playerHandler(uri string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		li, err := findImage(user, year, id)
+		li, err := findImage(uri)
 		if err != nil {
-			returnError(w, http.StatusNotFound, "Not Found")
+			writeError(w, http.StatusNotFound, "Not Found")
 			return
 		}
 
-		styles, err := getCss("public/gallery/post.css")
+		styles, err := getCss("public/gallery/player.css")
 		if err != nil {
-			returnError(w, http.StatusInternalServerError, err.Error())
+			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
 
-		post := PostPage{
-			Year:   year,
-			User:   user,
-			Image:  li,
-			Styles: styles,
+		post := PlayerPage{
+			Path:     uri,
+			Image:    li,
+			BackLink: path.Dir(uri),
+			Styles:   styles,
 		}
 
-		err = tmpl.ExecuteTemplate(w, "post.html", post)
+		err = tmpl.ExecuteTemplate(w, "player.html", post)
 		if err != nil {
-			returnError(w, http.StatusInternalServerError, err.Error())
+			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
 	}
 }
 
-func sortMedia(files []fs.DirEntry, order MediaOrder) []fs.DirEntry {
-	sort.Slice(files, func(i, j int) bool {
-		// Extract time stamp from file names
-		parts1 := strings.Split(files[i].Name(), "_")
-		parts2 := strings.Split(files[j].Name(), "_")
-
-		switch order {
-		case NewFirst:
-			return parts1[1] > parts2[1]
-		case OldFirst:
-			return parts1[1] < parts2[1]
-		default:
-			return parts1[1] > parts2[1]
-		}
-	})
-
-	return files
-}
-
-func yearHandler(user string, year string, filter string) http.HandlerFunc {
+// galleryHandler renders folder with images as a gallery
+func galleryHandler(subPath string, filter string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var images []Media
-		settings := userSettings[user]
+		settings := pageSettingsForPath(subPath, pageSettings)
 
-		mediaPath := path.Join(mediaDir, user, year)
+		mediaPath := path.Join(mediaDir, subPath)
 
 		files, err := os.ReadDir(mediaPath)
 		if err != nil {
-			returnError(w, http.StatusNotFound, "Not Found")
+			writeError(w, http.StatusNotFound, "Not Found")
 			return
 		}
 
@@ -383,65 +366,85 @@ func yearHandler(user string, year string, filter string) http.HandlerFunc {
 
 		for _, f := range sortedMedia {
 			if filter == "" {
-				images = append(images, makeMedia(f.Name(), user, year))
+				images = append(images, makeMedia(f.Name(), subPath))
 				continue
 			}
 
 			if strings.Contains(f.Name(), filter) {
-				images = append(images, makeMedia(f.Name(), user, year))
+				images = append(images, makeMedia(f.Name(), subPath))
 			}
 		}
 
-		styles, err := getCss("public/gallery/year.css")
+		styles, err := getCss("public/gallery/gallery.css")
 		if err != nil {
-			returnError(w, http.StatusInternalServerError, err.Error())
+			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
 
-		gallery := YearPage{
-			Year:         year,
-			User:         user,
+		gallery := GalleryPage{
+			Path:         subPath,
 			Images:       images,
+			BackLink:     path.Dir(subPath),
 			Styles:       styles,
-			UserSettings: userSettings[user],
+			PageSettings: pageSettingsForPath(subPath, pageSettings),
 		}
 
-		err = tmpl.ExecuteTemplate(w, "year.html", gallery)
+		err = tmpl.ExecuteTemplate(w, "gallery.html", gallery)
 		if err != nil {
-			returnError(w, http.StatusInternalServerError, err.Error())
+			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
 	}
 }
 
 func galleryRootHandler(w http.ResponseWriter, r *http.Request) {
-	parts := strings.FieldsFunc(r.URL.Path, func(c rune) bool {
-		return c == '/'
-	})
 
-	/*
-		 Handle the following routes:
-			/
-			/{user}
-			/{user}/{year}
-			/{user}/{year}/{media_id}
-	*/
+	p := strings.TrimPrefix(strings.TrimSuffix(r.URL.Path, "/"), "/")
 
-	switch len(parts) {
-	case 0:
-		indexHandler(w, r)
-	case 1:
-		userHandler(parts[0])(w, r)
-	case 2:
-		mediaType := r.URL.Query().Get("filter")
-		yearHandler(parts[0], parts[1], mediaType)(w, r)
-	case 3:
-		postHandler(parts[0], parts[1], parts[2])(w, r)
+	fullPath := path.Join(mediaDir, p)
+
+	stat, err := os.Stat(fullPath)
+	if err != nil {
+		writeError(w, http.StatusNotFound, "Not Found")
+		return
 	}
+
+	if stat.IsDir() {
+		content, err := os.ReadDir(fullPath)
+		if err != nil {
+			panic(err)
+		}
+
+		dirs := []fs.DirEntry{}
+		files := []fs.DirEntry{}
+		for _, c := range content {
+			if c.IsDir() {
+				dirs = append(dirs, c)
+				continue
+			}
+			files = append(files, c)
+		}
+
+		if len(dirs) > 0 {
+			albumsHandler(p)(w, r)
+			return
+		}
+
+		if len(files) > 0 {
+			mediaType := r.URL.Query().Get("filter")
+			galleryHandler(p, mediaType)(w, r)
+			return
+		}
+
+		writeError(w, http.StatusNotFound, "Not Found")
+		return
+	}
+
+	playerHandler(p)(w, r)
 }
 
 func rootHandler(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintf(w, "hello\n")
+	fmt.Fprintf(w, "🐈\n")
 }
 
 func main() {

@@ -5,3 +5,4 @@
 media
 .DS_*
 settings.json
+env.sh

@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>{{.Path}} gallery</title>
+    <title>{{.Title}} gallery</title>
     <style>
        {{.Styles}}
     </style>
@@ -33,10 +33,10 @@
       {{range .Images}}
       <div class="image">
         <!-- <p>{{.PublicPath}}</p> -->
-        <a href="{{.PageLink}}">
-          {{if isImage .Name}}
+        <a href="{{.UrlPath}}">
+          {{if isImage .FileName}}
           <img class="lazy" src="" data-url="{{.PublicPath}}" />
-          {{else if isVideo .Name}}
+          {{else if isVideo .FileName}}
           <video class="lazy" src="" data-url="{{.PublicPath}}" muted autoplay loop />
           {{end}}
         </a>

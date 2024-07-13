@@ -23,9 +23,9 @@
 
     <div class="ct">
       <div class="main">
-        {{if isImage .Image.Cur.Name}}
+        {{if isImage .Image.Cur.FileName}}
         <img src="{{.Image.Cur.PublicPath}}" />
-        {{else if isVideo .Image.Cur.Name}}
+        {{else if isVideo .Image.Cur.FileName}}
         <video src="{{.Image.Cur.PublicPath}}" controls muted autoplay loop />
         {{end}}
       </div>
@@ -33,14 +33,14 @@
 
     <div class="navbar">
       <div class="left">
-        {{if ne .Image.Prev.Name ""}}
-        <a class="prev" href="{{.Image.Prev.PageLink}}">Prev</a>
+        {{if ne .Image.Prev.FileName ""}}
+        <a class="prev" href="{{.Image.Prev.UrlPath}}">Prev</a>
         {{end}}
       </div>
       <a class="back" href="/gallery/{{.BackLink}}">Back</a>
       <div class="right">
-        {{if ne .Image.Next.Name ""}}
-        <a class="next" href="{{.Image.Next.PageLink}}">Next</a>
+        {{if ne .Image.Next.FileName ""}}
+        <a class="next" href="{{.Image.Next.UrlPath}}">Next</a>
         {{end}}
       </div>
     </div>

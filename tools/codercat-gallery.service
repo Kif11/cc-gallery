@@ -3,6 +3,9 @@ Description=Codercat Gallery
 After=network.target
 
 [Service]
+Environment=SPACES_KEY=<key>
+Environment=SPACES_SECRET=<secret>
+Environment=SPACES_BUCKET=<bucket>
 WorkingDirectory=/home/kiko/gallery/
 Type=simple
 Restart=always

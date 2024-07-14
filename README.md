@@ -10,12 +10,16 @@ go run ./injest/main.go ~/pr/instagram_data ./public/media
 Note: `insta_data_folder` directory structure should look like this:
 
 ```
-instagram_data_archive
-    user
-        content
-        media
+instagram_data_archive/
+    <user>/
+        content/
+            posts_1.json
+            ...
+        media/
+            reels/
+            posts/
+            ...
         ...
-
 ```
 
 ## Serving in production

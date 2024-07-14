@@ -11,6 +11,7 @@ import (
 	"path"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"testing/fstest"
 
@@ -45,7 +46,7 @@ type Config struct {
 // For Digital Ocean Spaces (S3)
 var config = Config{
 	ServerRoot:         "/gallery",
-	CDNRoot:            "https://cdn.codercat.xyz/gallery/",
+	CDNRoot:            "https://cdn.codercat.xyz/gallery",
 	LocalRoot:          ".",
 	DigitalOceanSpaces: true,
 }
@@ -256,7 +257,7 @@ func makeMedia(url string, config Config) Media {
 	return Media{
 		Type:        getMediaType(fName),
 		FileName:    fName,
-		PublicPath:  path.Join(config.CDNRoot, relativePath),
+		PublicPath:  fmt.Sprintf("%s/%s", config.CDNRoot, relativePath),
 		RelativeURL: relativePath,
 		LocalPath:   path.Join(config.LocalRoot, relativePath),
 		UrlPath:     path.Join(config.ServerRoot, relativePath),
@@ -406,7 +407,7 @@ func s3List() ([]string, error) {
 	endpoint := "nyc3.digitaloceanspaces.com"
 	region := "nyc3"
 
-	bucket := getEnv("BUCKET", "cc-storage")
+	bucket := getEnv("SPACES_BUCKET", "cc-storage")
 	key := getEnv("SPACES_KEY", "")
 	secret := getEnv("SPACES_SECRET", "")
 	galleryFolder := "gallery"
@@ -425,19 +426,37 @@ func s3List() ([]string, error) {
 	}
 	svc := s3.New(newSession)
 
-	// Get the list of items
-	resp, err := svc.ListObjectsV2(&s3.ListObjectsV2Input{
+	// // Get the list of items
+	// resp, err := svc.ListObjectsV2(&s3.ListObjectsV2Input{
+	// 	Bucket: aws.String(bucket),
+	// 	Prefix: aws.String(galleryFolder),
+	// })
+	// if err != nil {
+	// 	return []string{}, err
+	// }
+
+	names := []string{}
+	i := 0
+	err = svc.ListObjectsPages(&s3.ListObjectsInput{
 		Bucket: aws.String(bucket),
 		Prefix: aws.String(galleryFolder),
+	}, func(p *s3.ListObjectsOutput, last bool) (shouldContinue bool) {
+		fmt.Println("Page,", i)
+		i++
+
+		for _, item := range p.Contents {
+			names = append(names, *item.Key)
+		}
+		return true
 	})
 	if err != nil {
+		fmt.Println("failed to list objects", err)
 		return []string{}, err
 	}
 
-	names := []string{}
-	for _, item := range resp.Contents {
-		names = append(names, *item.Key)
-	}
+	// for _, item := range resp.Contents {
+	// 	names = append(names, *item.Key)
+	// }
 
 	return names, nil
 }
@@ -452,6 +471,9 @@ func digitalOceanSpacesFS() (fs.FS, error) {
 
 	for _, name := range media {
 		path := strings.TrimPrefix(name, "gallery/")
+		if path == "" {
+			continue
+		}
 		s3Fs[path] = &fstest.MapFile{}
 	}
 
@@ -492,10 +514,15 @@ func listFsItems(path string) (FsItems, error) {
 	}
 
 	for _, c := range content {
+		if c.Name() == "" {
+			continue
+		}
+
 		if c.IsDir() {
 			fsItems.Folders = append(fsItems.Folders, c)
 			continue
 		}
+
 		fsItems.Files = append(fsItems.Files, c)
 	}
 
@@ -542,7 +569,19 @@ func galleryRootHandler(w http.ResponseWriter, r *http.Request) {
 			})
 		}
 
-		// TODO SORT
+		sort.Slice(albums, func(i, j int) bool {
+			year1, err := strconv.ParseInt(albums[i].Name, 10, 32)
+			if err != nil {
+				fmt.Printf("sort failed, can not parse album name %s to int. ", albums[i].Name)
+				return false
+			}
+			year2, err := strconv.ParseInt(albums[j].Name, 10, 32)
+			if err != nil {
+				fmt.Printf("sort failed, can not parse album name %s to int. ", albums[j].Name)
+				return false
+			}
+			return year1 > year2
+		})
 
 		albumsHandler(albums, filepath.Dir(config.ServerRoot))(w, r)
 

@@ -21,9 +21,6 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3"
 )
 
-// Remote media directory
-// var cdnRoot = "https://cdn.codercat.xyz/gallery/"
-
 type Config struct {
 	// Root path of remote public server where media is stored
 	CDNRoot string
@@ -31,25 +28,25 @@ type Config struct {
 	ServerRoot string
 	// Local to the server director with media
 	LocalRoot string
-	//
-	DigitalOceanSpaces bool
+	// Switch backend from local directory to Digital Ocean Spaces (AWS S3 compatible storage)
+	UseDigitalOceanSpaces string
 }
 
 // For local directory
-// var config = Config{
-// 	ServerRoot:         "/gallery",
-// 	CDNRoot:            "/public/media",
-// 	LocalRoot:          "/Users/kif/pr/ccgallery/public/media",
-// 	DigitalOceanSpaces: false,
-// }
+var config = Config{
+	ServerRoot:            "/gallery",
+	CDNRoot:               "/public/media",
+	LocalRoot:             "/Users/kif/pr/ccgallery/public/media",
+	UseDigitalOceanSpaces: getEnv("CCGALLERY_USE_SPACES_STORAGE", "0"),
+}
 
 // For Digital Ocean Spaces (S3)
-var config = Config{
-	ServerRoot:         "/gallery",
-	CDNRoot:            "https://cdn.codercat.xyz/gallery",
-	LocalRoot:          ".",
-	DigitalOceanSpaces: true,
-}
+// var config = Config{
+// 	ServerRoot:            "/gallery",
+// 	CDNRoot:               "https://cdn.codercat.xyz/gallery",
+// 	LocalRoot:             ".",
+// 	UseDigitalOceanSpaces: getEnv("CCGALLERY_USE_SPACES_STORAGE", "1"),
+// }
 
 var funcs = template.FuncMap{
 	"isImage": isImage,
@@ -398,6 +395,7 @@ func isDir(path string) bool {
 func getEnv(name string, fallback string) string {
 	value := os.Getenv(name)
 	if value == "" {
+		fmt.Printf("[-] Environment value for %s is not set, using default %s\n", name, fallback)
 		return fallback
 	}
 	return value
@@ -426,37 +424,26 @@ func s3List() ([]string, error) {
 	}
 	svc := s3.New(newSession)
 
-	// // Get the list of items
-	// resp, err := svc.ListObjectsV2(&s3.ListObjectsV2Input{
-	// 	Bucket: aws.String(bucket),
-	// 	Prefix: aws.String(galleryFolder),
-	// })
-	// if err != nil {
-	// 	return []string{}, err
-	// }
-
 	names := []string{}
+
 	i := 0
 	err = svc.ListObjectsPages(&s3.ListObjectsInput{
 		Bucket: aws.String(bucket),
 		Prefix: aws.String(galleryFolder),
 	}, func(p *s3.ListObjectsOutput, last bool) (shouldContinue bool) {
-		fmt.Println("Page,", i)
 		i++
 
 		for _, item := range p.Contents {
 			names = append(names, *item.Key)
 		}
+
 		return true
 	})
+
 	if err != nil {
 		fmt.Println("failed to list objects", err)
 		return []string{}, err
 	}
-
-	// for _, item := range resp.Contents {
-	// 	names = append(names, *item.Key)
-	// }
 
 	return names, nil
 }
@@ -492,7 +479,7 @@ func listFsItems(path string) (FsItems, error) {
 	var err error
 	var content []fs.DirEntry
 
-	if config.DigitalOceanSpaces {
+	if config.UseDigitalOceanSpaces == "1" {
 
 		fSys, err = digitalOceanSpacesFS()
 		if err != nil {
@@ -595,8 +582,6 @@ func galleryRootHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeError(w, http.StatusNotFound, "Not Found")
-	// TODO NOT FOUND
-
 }
 
 func rootHandler(w http.ResponseWriter, r *http.Request) {

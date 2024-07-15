@@ -33,20 +33,20 @@ type Config struct {
 }
 
 // For local directory
-var config = Config{
-	ServerRoot:            "/gallery",
-	CDNRoot:               "/public/media",
-	LocalRoot:             "/Users/kif/pr/ccgallery/public/media",
-	UseDigitalOceanSpaces: getEnv("CCGALLERY_USE_SPACES_STORAGE", "0"),
-}
-
-// For Digital Ocean Spaces (S3)
 // var config = Config{
 // 	ServerRoot:            "/gallery",
-// 	CDNRoot:               "https://cdn.codercat.xyz/gallery",
-// 	LocalRoot:             ".",
-// 	UseDigitalOceanSpaces: getEnv("CCGALLERY_USE_SPACES_STORAGE", "1"),
-// }
+// 	CDNRoot:               "/public/media",
+// 	LocalRoot:             "/Users/kif/pr/ccgallery/public/media",
+// 	UseDigitalOceanSpaces: getEnv("CCGALLERY_USE_SPACES_STORAGE", "0"),
+// }l
+
+// For Digital Ocean Spaces (S3)
+var config = Config{
+	ServerRoot:            "/gallery",
+	CDNRoot:               "https://cdn.codercat.xyz/gallery",
+	LocalRoot:             ".",
+	UseDigitalOceanSpaces: getEnv("CCGALLERY_USE_SPACES_STORAGE", "1"),
+}
 
 var funcs = template.FuncMap{
 	"isImage": isImage,
@@ -219,29 +219,6 @@ func getMediaType(filePath string) MediaFileType {
 	}
 }
 
-func sortMedia(files []fs.DirEntry, order MediaOrder) []fs.DirEntry {
-	sort.Slice(files, func(i, j int) bool {
-		// Extract time stamp from file names
-		parts1 := strings.Split(files[i].Name(), "_")
-		parts2 := strings.Split(files[j].Name(), "_")
-
-		if len(parts1) < 2 || len(parts2) < 2 {
-			return files[i].Name() < files[j].Name()
-		}
-
-		switch order {
-		case NewFirst:
-			return parts1[1] > parts2[1]
-		case OldFirst:
-			return parts1[1] < parts2[1]
-		default:
-			return parts1[1] > parts2[1]
-		}
-	})
-
-	return files
-}
-
 func makeMedia(url string, config Config) Media {
 
 	relativePath := strings.TrimPrefix(url, "/")
@@ -266,7 +243,7 @@ func makeLinkMedia(m Media, images []fs.DirEntry) (LinkedMedia, error) {
 	li := LinkedMedia{}
 
 	settings := pageSettingsForPath(m.RelativeURL, pageSettings)
-	sortedMedia := sortMedia(images, settings.MediaOrder)
+	sortedMedia := sortDirEntries(images, settings.MediaOrder)
 
 	for i := 0; i < len(sortedMedia); i++ {
 		f := sortedMedia[i]
@@ -348,24 +325,8 @@ func playerHandler(li LinkedMedia, backLink string) http.HandlerFunc {
 }
 
 // galleryHandler renders folder with images as a gallery
-func galleryHandler(media []fs.DirEntry, subPath string, filter string) http.HandlerFunc {
+func galleryHandler(media []Media, title, string, backLink string, settings PageSettings) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		var images []Media
-		settings := pageSettingsForPath(subPath, pageSettings)
-
-		sortedMedia := sortMedia(media, settings.MediaOrder)
-
-		for _, f := range sortedMedia {
-			if filter == "" {
-				images = append(images, makeMedia(path.Join(subPath, f.Name()), config))
-				continue
-			}
-
-			if strings.Contains(f.Name(), filter) {
-				images = append(images, makeMedia(path.Join(subPath, f.Name()), config))
-			}
-		}
-
 		styles, err := getCss("public/gallery/gallery.css")
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
@@ -373,9 +334,9 @@ func galleryHandler(media []fs.DirEntry, subPath string, filter string) http.Han
 		}
 
 		gallery := GalleryPage{
-			Title:        subPath,
-			Images:       images,
-			BackLink:     path.Dir(subPath),
+			Title:        title,
+			Images:       media,
+			BackLink:     backLink,
 			Styles:       styles,
 			PageSettings: settings,
 		}
@@ -516,6 +477,52 @@ func listFsItems(path string) (FsItems, error) {
 	return fsItems, nil
 }
 
+func sortDirEntries(files []fs.DirEntry, order MediaOrder) []fs.DirEntry {
+	sort.Slice(files, func(i, j int) bool {
+		// Extract time stamp from file names
+		parts1 := strings.Split(files[i].Name(), "_")
+		parts2 := strings.Split(files[j].Name(), "_")
+
+		if len(parts1) < 2 || len(parts2) < 2 {
+			return files[i].Name() < files[j].Name()
+		}
+
+		switch order {
+		case NewFirst:
+			return parts1[1] > parts2[1]
+		case OldFirst:
+			return parts1[1] < parts2[1]
+		default:
+			return parts1[1] > parts2[1]
+		}
+	})
+
+	return files
+}
+
+// filterDirEntries takes filter string like "post reel" and filter all
+// DirEntries that include "post" or "reel" in their filename
+func filterDirEntries(entries []fs.DirEntry, filter string) (filtered []fs.DirEntry) {
+
+	parts := strings.Split(filter, " ")
+
+	for _, f := range entries {
+		for _, word := range parts {
+			if word == "" {
+				filtered = append(filtered, f)
+				continue
+			}
+
+			if strings.Contains(f.Name(), word) {
+				filtered = append(filtered, f)
+			}
+		}
+
+	}
+
+	return filtered
+}
+
 func galleryRootHandler(w http.ResponseWriter, r *http.Request) {
 
 	m := makeMedia(r.URL.Path, config)
@@ -559,12 +566,12 @@ func galleryRootHandler(w http.ResponseWriter, r *http.Request) {
 		sort.Slice(albums, func(i, j int) bool {
 			year1, err := strconv.ParseInt(albums[i].Name, 10, 32)
 			if err != nil {
-				fmt.Printf("sort failed, can not parse album name %s to int. ", albums[i].Name)
+				fmt.Printf("sort failed, can not parse album name '%s' to int.\n", albums[i].Name)
 				return false
 			}
 			year2, err := strconv.ParseInt(albums[j].Name, 10, 32)
 			if err != nil {
-				fmt.Printf("sort failed, can not parse album name %s to int. ", albums[j].Name)
+				fmt.Printf("sort failed, can not parse album name '%s' to int.\n", albums[j].Name)
 				return false
 			}
 			return year1 > year2
@@ -577,7 +584,19 @@ func galleryRootHandler(w http.ResponseWriter, r *http.Request) {
 
 	// 3. PATH CONTAINS MEDIA FILES. RENDER GALLERY VIEW
 	if len(fsItems.Files) > 0 {
-		galleryHandler(fsItems.Files, m.RelativeURL, r.URL.Query().Get("filter"))(w, r)
+		filter := r.URL.Query().Get("filter")
+
+		settings := pageSettingsForPath(m.RelativeURL, pageSettings)
+		filtered := filterDirEntries(fsItems.Files, filter)
+		sorted := sortDirEntries(filtered, settings.MediaOrder)
+
+		var media []Media
+		for _, f := range sorted {
+			mi := makeMedia(path.Join(m.RelativeURL, f.Name()), config)
+			media = append(media, mi)
+		}
+
+		galleryHandler(media, m.RelativeURL, filter, path.Dir(m.UrlPath), settings)(w, r)
 		return
 	}
 

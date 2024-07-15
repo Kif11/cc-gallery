@@ -58,6 +58,7 @@ const (
 	Post  InstType = "post"
 	IgTv  InstType = "igtv"
 	Story InstType = "story"
+	Reel  InstType = "reel"
 )
 
 type Media struct {
@@ -80,6 +81,10 @@ type IgTvMedia struct {
 
 type Stories struct {
 	IGStories []Media `json:"ig_stories"`
+}
+
+type Reels struct {
+	IGReels []MediaList `json:"ig_reels_media"`
 }
 
 func listDirs(path string) ([]string, error) {
@@ -241,6 +246,16 @@ func processUserMedia(user string, srcDir string, dstDir string) {
 		return
 	}
 
+	// Process reels
+	reelsFile := fmt.Sprintf("%s/%s/content/reels.json", srcDir, user)
+	reels := Reels{}
+
+	err = readJson(reelsFile, &reels)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
 	allMedia := []Media{}
 
 	// Append post
@@ -255,6 +270,11 @@ func processUserMedia(user string, srcDir string, dstDir string) {
 
 	// Append stories
 	allMedia = append(allMedia, hydrateMedia(stories.IGStories, Story, user)...)
+
+	// Append reels
+	for _, m := range reels.IGReels {
+		allMedia = append(allMedia, hydrateMedia(m.Media, Reel, user)...)
+	}
 
 	// Debug
 	// for i, v := range allMedia {

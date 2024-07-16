@@ -409,13 +409,18 @@ func s3List() ([]string, error) {
 	return names, nil
 }
 
-func digitalOceanSpacesFS() (fs.FS, func() (fs.FS, error)) {
+func digitalOceanSpacesFS() (fs.FS, func() error) {
 	var s3Fs fstest.MapFS = make(map[string]*fstest.MapFile)
 
-	return s3Fs, func() (fs.FS, error) {
+	return s3Fs, func() error {
 		files, err := s3List()
 		if err != nil {
-			return nil, err
+			return err
+		}
+
+		// Clear the map
+		for k := range s3Fs {
+			delete(s3Fs, k)
 		}
 
 		for _, name := range files {
@@ -426,19 +431,9 @@ func digitalOceanSpacesFS() (fs.FS, func() (fs.FS, error)) {
 			s3Fs[path] = &fstest.MapFile{}
 		}
 
-		return s3Fs, nil
+		return nil
 	}
 }
-
-// func localFS() func() (fs.FS, error) {
-// 	var fSys fs.FS
-
-// 	return func() (fs.FS, error) {
-// 		fSys = os.DirFS(path)
-
-// 		return fSys, nil
-// 	}
-// }
 
 type FsItems struct {
 	Folders []fs.DirEntry
@@ -616,9 +611,9 @@ func makeGalleryRootHandler(fSys fs.FS) func(w http.ResponseWriter, r *http.Requ
 
 }
 
-func makeUpdateHandler(update func() (fs.FS, error)) func(w http.ResponseWriter, r *http.Request) {
+func makeUpdateHandler(update func() error) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
-		_, err := update()
+		err := update()
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
@@ -642,7 +637,7 @@ func main() {
 
 	dirs, update := digitalOceanSpacesFS()
 
-	_, err := update()
+	err := update()
 	if err != nil {
 		panic(err)
 	}

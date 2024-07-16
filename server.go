@@ -221,7 +221,7 @@ func getMediaType(filePath string) MediaFileType {
 
 func makeMedia(url string, config Config) Media {
 
-	relativePath := strings.TrimPrefix(url, "/")
+	relativePath := strings.TrimSuffix(strings.TrimPrefix(url, "/"), "/")
 	fName := ""
 
 	if !isDir(relativePath) {
@@ -409,59 +409,54 @@ func s3List() ([]string, error) {
 	return names, nil
 }
 
-func digitalOceanSpacesFS() (fs.FS, error) {
+func digitalOceanSpacesFS() (fs.FS, func() (fs.FS, error)) {
 	var s3Fs fstest.MapFS = make(map[string]*fstest.MapFile)
 
-	media, err := s3List()
-	if err != nil {
-		return nil, err
-	}
-
-	for _, name := range media {
-		path := strings.TrimPrefix(name, "gallery/")
-		if path == "" {
-			continue
+	return s3Fs, func() (fs.FS, error) {
+		files, err := s3List()
+		if err != nil {
+			return nil, err
 		}
-		s3Fs[path] = &fstest.MapFile{}
-	}
 
-	return s3Fs, nil
+		for _, name := range files {
+			path := strings.TrimPrefix(name, "gallery/")
+			if path == "" {
+				continue
+			}
+			s3Fs[path] = &fstest.MapFile{}
+		}
+
+		return s3Fs, nil
+	}
 }
+
+// func localFS() func() (fs.FS, error) {
+// 	var fSys fs.FS
+
+// 	return func() (fs.FS, error) {
+// 		fSys = os.DirFS(path)
+
+// 		return fSys, nil
+// 	}
+// }
 
 type FsItems struct {
 	Folders []fs.DirEntry
 	Files   []fs.DirEntry
 }
 
-func listFsItems(path string) (FsItems, error) {
+func listFsItems(fSys fs.FS, path string) (FsItems, error) {
 	fsItems := FsItems{}
 
-	var fSys fs.FS
 	var err error
-	var content []fs.DirEntry
+	var dirs []fs.DirEntry
 
-	if config.UseDigitalOceanSpaces == "1" {
-
-		fSys, err = digitalOceanSpacesFS()
-		if err != nil {
-			return fsItems, err
-		}
-		content, err = fs.ReadDir(fSys, path)
-		if err != nil {
-			return fsItems, err
-		}
-
-	} else {
-
-		fSys = os.DirFS(path)
-		content, err = fs.ReadDir(fSys, ".")
-		if err != nil {
-			return fsItems, err
-		}
-
+	dirs, err = fs.ReadDir(fSys, path)
+	if err != nil {
+		return fsItems, err
 	}
 
-	for _, c := range content {
+	for _, c := range dirs {
 		if c.Name() == "" {
 			continue
 		}
@@ -533,86 +528,104 @@ func valueFromCookies(cookies []*http.Cookie, name string) string {
 	return ""
 }
 
-func galleryRootHandler(w http.ResponseWriter, r *http.Request) {
+func makeGalleryRootHandler(fSys fs.FS) func(w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
 
-	m := makeMedia(r.URL.Path, config)
+		m := makeMedia(r.URL.Path, config)
 
-	searchPath := m.LocalPath
-	if m.Type != Directory {
-		searchPath = path.Dir(m.LocalPath)
-	}
+		searchPath := m.LocalPath
+		if m.Type != Directory {
+			searchPath = path.Dir(m.LocalPath)
+		}
 
-	fsItems, err := listFsItems(searchPath)
-	if err != nil {
-		writeError(w, http.StatusNotFound, "Not Found")
-		return
-	}
-
-	settings := pageSettingsForPath(m.RelativeURL, pageSettings)
-	filter := valueFromCookies(r.Cookies(), "filter")
-	if filter == "" {
-		filter = r.URL.Query().Get("filter")
-	}
-	filtered := filterDirEntries(fsItems.Files, filter)
-	sortedFsEntries := sortDirEntries(filtered, settings.MediaOrder)
-
-	// 1. PATH IS A FILE. RENDER VIEWER
-	if m.Type != Directory {
-		li, err := makeLinkMedia(m, sortedFsEntries)
+		fsItems, err := listFsItems(fSys, searchPath)
 		if err != nil {
 			writeError(w, http.StatusNotFound, "Not Found")
 			return
 		}
 
-		playerHandler(li, path.Dir(m.UrlPath))(w, r)
+		settings := pageSettingsForPath(m.RelativeURL, pageSettings)
+		filter := valueFromCookies(r.Cookies(), "filter")
+		if filter == "" {
+			filter = r.URL.Query().Get("filter")
+		}
+		filtered := filterDirEntries(fsItems.Files, filter)
+		sortedFsEntries := sortDirEntries(filtered, settings.MediaOrder)
 
-		return
-	}
+		// 1. PATH IS A FILE. RENDER VIEWER
+		if m.Type != Directory {
 
-	// 2. PATH CONTAINS FOLDERS. RENDER ALBUM VIEW
-	if len(fsItems.Folders) > 0 {
+			li, err := makeLinkMedia(m, sortedFsEntries)
+			if err != nil {
+				writeError(w, http.StatusNotFound, "Not Found")
+				return
+			}
 
-		var albums []Album
-		for _, i := range fsItems.Folders {
+			playerHandler(li, path.Dir(m.UrlPath))(w, r)
 
-			albums = append(albums, Album{
-				Name: i.Name(),
-				Link: path.Join(config.ServerRoot, r.URL.Path, i.Name()),
+			return
+		}
+
+		// 2. PATH CONTAINS FOLDERS. RENDER ALBUM VIEW
+		if len(fsItems.Folders) > 0 {
+
+			var albums []Album
+			for _, i := range fsItems.Folders {
+
+				albums = append(albums, Album{
+					Name: i.Name(),
+					Link: path.Join(config.ServerRoot, r.URL.Path, i.Name()),
+				})
+			}
+
+			sort.Slice(albums, func(i, j int) bool {
+				year1, err := strconv.ParseInt(albums[i].Name, 10, 32)
+				if err != nil {
+					fmt.Printf("sort failed, can not parse album name '%s' to int.\n", albums[i].Name)
+					return false
+				}
+				year2, err := strconv.ParseInt(albums[j].Name, 10, 32)
+				if err != nil {
+					fmt.Printf("sort failed, can not parse album name '%s' to int.\n", albums[j].Name)
+					return false
+				}
+				return year1 > year2
 			})
+
+			albumsHandler(albums, filepath.Dir(config.ServerRoot))(w, r)
+
+			return
 		}
 
-		sort.Slice(albums, func(i, j int) bool {
-			year1, err := strconv.ParseInt(albums[i].Name, 10, 32)
-			if err != nil {
-				fmt.Printf("sort failed, can not parse album name '%s' to int.\n", albums[i].Name)
-				return false
+		// 3. PATH CONTAINS MEDIA FILES. RENDER GALLERY VIEW
+		if len(fsItems.Files) > 0 {
+
+			var media []Media
+			for _, f := range sortedFsEntries {
+				mi := makeMedia(path.Join(m.RelativeURL, f.Name()), config)
+				media = append(media, mi)
 			}
-			year2, err := strconv.ParseInt(albums[j].Name, 10, 32)
-			if err != nil {
-				fmt.Printf("sort failed, can not parse album name '%s' to int.\n", albums[j].Name)
-				return false
-			}
-			return year1 > year2
-		})
 
-		albumsHandler(albums, filepath.Dir(config.ServerRoot))(w, r)
+			galleryHandler(media, m.RelativeURL, path.Dir(m.UrlPath), settings)(w, r)
 
-		return
-	}
-
-	// 3. PATH CONTAINS MEDIA FILES. RENDER GALLERY VIEW
-	if len(fsItems.Files) > 0 {
-		var media []Media
-		for _, f := range sortedFsEntries {
-			mi := makeMedia(path.Join(m.RelativeURL, f.Name()), config)
-			media = append(media, mi)
+			return
 		}
 
-		galleryHandler(media, m.RelativeURL, path.Dir(m.UrlPath), settings)(w, r)
-		return
+		writeError(w, http.StatusNotFound, "Not Found")
 	}
 
-	writeError(w, http.StatusNotFound, "Not Found")
+}
+
+func makeUpdateHandler(update func() (fs.FS, error)) func(w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		_, err := update()
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+
+		w.WriteHeader(http.StatusOK)
+	}
 }
 
 func rootHandler(w http.ResponseWriter, r *http.Request) {
@@ -627,10 +640,22 @@ func main() {
 	fs := http.FileServer(http.Dir("public"))
 	mux.Handle("/public/", http.StripPrefix("/public", fs))
 
+	dirs, update := digitalOceanSpacesFS()
+
+	_, err := update()
+	if err != nil {
+		panic(err)
+	}
+
+	galleryRootHandler := makeGalleryRootHandler(dirs)
+
 	// Configure gallery mux
 	galleryMux.HandleFunc("/", galleryRootHandler)
 
+	updateHandler := makeUpdateHandler(update)
+
 	// Configure main mux
+	mux.HandleFunc(config.ServerRoot+"/update", updateHandler)
 	mux.Handle(config.ServerRoot+"/", http.StripPrefix(config.ServerRoot, galleryMux))
 	mux.HandleFunc("/", rootHandler)
 

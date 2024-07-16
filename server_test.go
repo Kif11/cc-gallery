@@ -13,9 +13,18 @@ func TestMakePathFromUrl(t *testing.T) {
 		{"directory/", Media{
 			Type:        Directory,
 			PublicPath:  "/public/media/directory",
+			FileName:    "",
 			LocalPath:   "/home/bob/media/directory",
-			RelativeURL: "directory/",
+			RelativeURL: "directory",
 			UrlPath:     "/gallery/directory",
+		}},
+		{"directory/file.jpg", Media{
+			Type:        Image,
+			PublicPath:  "/public/media/directory/file.jpg",
+			FileName:    "file.jpg",
+			LocalPath:   "/home/bob/media/directory/file.jpg",
+			RelativeURL: "directory/file.jpg",
+			UrlPath:     "/gallery/directory/file.jpg",
 		}},
 	}
 

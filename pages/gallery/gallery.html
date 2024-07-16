@@ -21,12 +21,13 @@
       <form id="filter" method="get">
         <label>Filter</label>
         <input
+          id="filter-input"
           type="text"
           name="filter"
           placeholder="post, story, igtv, mp4, jpg"
           title="Filter media that contain provided filter in its name. Typical media name is story_12345_0.jpg which follow the template {type}_{unix_timestamp}_{index}.{ext}"
         />
-        <button type="submit">Apply</button>
+        <button id="set-filter" type="submit">Apply</button>
       </form>
     </section>
     <section class="gallery">
@@ -99,6 +100,47 @@
           }
         });
       })();
+
+      function setCookie(name, value, days) {
+        var expires = "";
+        if (days) {
+          var date = new Date();
+          date.setTime(date.getTime() + days * 24 * 60 * 60 * 1000);
+          expires = "; expires=" + date.toUTCString();
+        }
+        document.cookie = name + "=" + (value || "") + expires + "; path=/";
+      }
+      
+      function getCookie(name) {
+        var nameEQ = name + "=";
+        var ca = document.cookie.split(";");
+        for (var i = 0; i < ca.length; i++) {
+          var c = ca[i];
+          while (c.charAt(0) == " ") c = c.substring(1, c.length);
+          if (c.indexOf(nameEQ) == 0) return c.substring(nameEQ.length, c.length);
+        }
+        return null;
+      }
+
+      function eraseCookie(name) {
+        document.cookie = name + "=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT;";
+      }
+
+      const input = document.getElementById("filter-input");
+      document.getElementById("set-filter").addEventListener("click", function() {
+        setCookie("filter", input.value);
+      });
+
+      input.value = getCookie("filter");
+
+      const queryString = window.location.search;
+      const urlParams = new URLSearchParams(queryString);
+      const filterFromURL = urlParams.get('filter')
+
+      if (filterFromURL) {
+        setCookie("filter", filterFromURL);
+        input.value = filterFromURL;
+      }
     </script>
   </body>
 </html>

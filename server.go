@@ -325,7 +325,7 @@ func playerHandler(li LinkedMedia, backLink string) http.HandlerFunc {
 }
 
 // galleryHandler renders folder with images as a gallery
-func galleryHandler(media []Media, title, string, backLink string, settings PageSettings) http.HandlerFunc {
+func galleryHandler(media []Media, title string, backLink string, settings PageSettings) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		styles, err := getCss("public/gallery/gallery.css")
 		if err != nil {
@@ -356,7 +356,7 @@ func isDir(path string) bool {
 func getEnv(name string, fallback string) string {
 	value := os.Getenv(name)
 	if value == "" {
-		fmt.Printf("[-] Environment value for %s is not set, using default %s\n", name, fallback)
+		fmt.Printf("[-] Environment value for %s is not set, using default '%s'\n", name, fallback)
 		return fallback
 	}
 	return value
@@ -523,6 +523,16 @@ func filterDirEntries(entries []fs.DirEntry, filter string) (filtered []fs.DirEn
 	return filtered
 }
 
+func valueFromCookies(cookies []*http.Cookie, name string) string {
+	for _, c := range cookies {
+		if c.Name == name {
+			return c.Value
+		}
+	}
+
+	return ""
+}
+
 func galleryRootHandler(w http.ResponseWriter, r *http.Request) {
 
 	m := makeMedia(r.URL.Path, config)
@@ -538,9 +548,17 @@ func galleryRootHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	settings := pageSettingsForPath(m.RelativeURL, pageSettings)
+	filter := valueFromCookies(r.Cookies(), "filter")
+	if filter == "" {
+		filter = r.URL.Query().Get("filter")
+	}
+	filtered := filterDirEntries(fsItems.Files, filter)
+	sortedFsEntries := sortDirEntries(filtered, settings.MediaOrder)
+
 	// 1. PATH IS A FILE. RENDER VIEWER
 	if m.Type != Directory {
-		li, err := makeLinkMedia(m, fsItems.Files)
+		li, err := makeLinkMedia(m, sortedFsEntries)
 		if err != nil {
 			writeError(w, http.StatusNotFound, "Not Found")
 			return
@@ -584,19 +602,13 @@ func galleryRootHandler(w http.ResponseWriter, r *http.Request) {
 
 	// 3. PATH CONTAINS MEDIA FILES. RENDER GALLERY VIEW
 	if len(fsItems.Files) > 0 {
-		filter := r.URL.Query().Get("filter")
-
-		settings := pageSettingsForPath(m.RelativeURL, pageSettings)
-		filtered := filterDirEntries(fsItems.Files, filter)
-		sorted := sortDirEntries(filtered, settings.MediaOrder)
-
 		var media []Media
-		for _, f := range sorted {
+		for _, f := range sortedFsEntries {
 			mi := makeMedia(path.Join(m.RelativeURL, f.Name()), config)
 			media = append(media, mi)
 		}
 
-		galleryHandler(media, m.RelativeURL, filter, path.Dir(m.UrlPath), settings)(w, r)
+		galleryHandler(media, m.RelativeURL, path.Dir(m.UrlPath), settings)(w, r)
 		return
 	}
 

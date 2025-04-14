@@ -25,7 +25,7 @@
           type="text"
           name="filter"
           placeholder="post, story, igtv, mp4, jpg"
-          title="Filter media that contain provided filter in its name. Typical media name is story_12345_0.jpg which follow the template {type}_{unix_timestamp}_{index}.{ext}"
+          title="Filter media by keyword in the file name. Typical media name is story_12345_0.jpg which follow the template {type}_{unix_timestamp}_{index}.{ext}"
         />
         <button id="set-filter" type="submit">Apply</button>
       </form>
@@ -48,13 +48,10 @@
       const backLink = document.querySelector(".back");
 
       document.addEventListener("keydown", (e) => {
-        if (e.keyCode == "37") {
-          // left
-        } else if (e.keyCode == "39") {
-          // right
-        } else if (e.keyCode == "38") {
-          // up
-          backLink.click();
+        switch (e.key) {
+          case "ArrowUp":
+            backLink.click();
+            break;
         }
       });
 

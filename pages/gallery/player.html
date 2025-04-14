@@ -1,75 +1,88 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Post</title>
-    <meta property="og:image" content="https://codercat.xyz{{.Image.Cur.PublicPath}}">
 
-    <style>
-       {{.Styles}}
-    </style>
-  </head>
-  <body>
-    <details class="hotkeys">
-      <summary>Hotkeys</summary>
-      <ul>
-        <li>&larr; &rarr; - previous or next post</li>
-        <li>&uarr; - go back to the gallery</li>
-        <li>M - toggle sound on videos</li>
-      </ul>
-    </details>
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Post</title>
+  <meta property="og:image" content="https://codercat.xyz{{.Image.Cur.PublicPath}}">
 
-    <div class="ct">
-      <div class="main">
-        {{if isImage .Image.Cur.FileName}}
-        <img src="{{.Image.Cur.PublicPath}}" />
-        {{else if isVideo .Image.Cur.FileName}}
-        <video src="{{.Image.Cur.PublicPath}}" controls muted autoplay loop />
-        {{end}}
-      </div>
+  <style>
+    {{.Styles}}
+  </style>
+</head>
+
+<body>
+  <!-- <details class="hotkeys">
+    <summary>Hotkeys</summary>
+    <ul>
+      <li>&larr; &rarr; - previous or next post</li>
+      <li>&uarr; - go back to the gallery</li>
+      <li>M - toggle sound on videos</li>
+    </ul>
+  </details> -->
+
+  <div class="ct">
+    <div class="main">
+      {{if isImage .Image.Cur.FileName}}
+      <img src="{{.Image.Cur.PublicPath}}" />
+      {{else if isVideo .Image.Cur.FileName}}
+      <video src="{{.Image.Cur.PublicPath}}" controls muted autoplay loop />
+      {{end}}
     </div>
+  </div>
 
-    <div class="navbar">
-      <div class="left">
-        {{if ne .Image.Prev.FileName ""}}
-        <a class="prev" href="{{.Image.Prev.UrlPath}}">Prev</a>
-        {{end}}
-      </div>
-      <a class="back" href="/gallery/{{.BackLink}}">Back</a>
-      <div class="right">
-        {{if ne .Image.Next.FileName ""}}
-        <a class="next" href="{{.Image.Next.UrlPath}}">Next</a>
-        {{end}}
-      </div>
+  <div class="navbar">
+    <div class="left">
+      {{if ne .Image.Prev.FileName ""}}
+      <a class="btn prev" href="{{.Image.Prev.UrlPath}}">Prev</a>
+      {{end}}
     </div>
+    <a class="btn back" href="{{.BackLink}}">Back</a>
+    <div class="right">
+      {{if ne .Image.Next.FileName ""}}
+      <a class="btn next" href="{{.Image.Next.UrlPath}}">Next</a>
+      {{end}}
+    </div>
+  </div>
 
-    <script>
-      const backLink = document.querySelector(".back");
-      const nextLink = document.querySelector(".next");
-      const prevLink = document.querySelector(".prev");
-      const videoEl = document.querySelector("video");
+  <script>
+    const nextLink = document.querySelector(".next");
+    const prevLink = document.querySelector(".prev");
+    const videoEl = document.querySelector("video");
 
-      document.addEventListener("keydown", (e) => {
-        console.log(e.code);
-        if (e.keyCode == "37") {
-          // left
+    function goBackToGalery() {
+      let backLink = "{{.BackLink}}"
+
+      // Restore query parameter from session storage
+      const queryParams = sessionStorage.getItem("queryParams");
+      if (queryParams) {
+        backLink = "{{.BackLink}}/" + queryParams
+      }
+
+      window.location.replace("{{.BackLink}}/" + queryParams);
+      sessionStorage.removeItem("queryParams");
+    }
+
+    document.addEventListener("keydown", (e) => {
+      switch (e.key) {
+        case "ArrowLeft":
           prevLink.click();
-        } else if (e.keyCode == "39") {
-          // right
+          break;
+        case "ArrowRight":
           nextLink.click();
-        } else if (e.keyCode == "38") {
-          // up
-          const queryParams = sessionStorage.getItem("queryParams");
-          if (queryParams) {
-            window.location.replace("/gallery/{{.BackLink}}/" + queryParams);
-            sessionStorage.removeItem("queryParams");
-          }
-        } else if (e.code == "KeyM") {
-          videoEl.muted = !videoEl.muted;
+          break;
+        case "ArrowUp": {
+          goBackToGalery();
+          break;
         }
-      });
-    </script>
-  </body>
+        case "m":
+          videoEl.muted = !videoEl.muted;
+          break;
+      }
+    });
+  </script>
+</body>
+
 </html>

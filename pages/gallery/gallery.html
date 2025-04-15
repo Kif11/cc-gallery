@@ -57,20 +57,44 @@
 
       document.addEventListener("DOMContentLoaded", () => {
         const lazyMediaEls = document.querySelectorAll(".lazy");
+        let scrollTimeout;
+        let visibleElements = new Set();
+
+        // Function to load visible elements
+        function loadVisibleElements() {
+          console.log("[D] visibleElements: ", visibleElements)
+          visibleElements.forEach(el => {
+            el.setAttribute("src", el.dataset.url);
+            visibleElements.delete(el);
+          });
+        }
 
         if ("IntersectionObserver" in window) {
           let mediaLoadObs = new IntersectionObserver(function (entries, observer) {
             entries.forEach((entry) => {
               if (entry.isIntersecting) {
-                entry.target.setAttribute("src", entry.target.dataset.url);
-                mediaLoadObs.unobserve(entry.target);
+                visibleElements.add(entry.target);
+              } else {
+                visibleElements.delete(entry.target);
               }
             });
+          }, {
+            rootMargin: '100px 0px', // Increase buffer zone since we're loading on scroll stop
+            threshold: 0.1
           });
 
           lazyMediaEls.forEach((el) => {
             mediaLoadObs.observe(el);
           });
+
+          // Load images when scrolling stops
+          window.addEventListener('scroll', () => {
+            clearTimeout(scrollTimeout);
+            scrollTimeout = setTimeout(loadVisibleElements, 150); // Wait 150ms after scroll stops
+          });
+
+          // Also load images on initial page load
+          loadVisibleElements();
         }
       });
 

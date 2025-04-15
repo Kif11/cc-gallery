@@ -1,6 +1,8 @@
 package main
 
 import (
+	"embed"
+	_ "embed"
 	"fmt"
 	"html/template"
 	"io"
@@ -20,6 +22,30 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
 )
+
+//go:embed web/gallery/*.html
+var galleryDir embed.FS
+
+//go:embed web/global.css
+var globalCss []byte
+
+//go:embed web/gallery/album.css
+var albumCss []byte
+
+//go:embed web/gallery/player.css
+var playerCss []byte
+
+//go:embed web/gallery/gallery.css
+var galleryCss []byte
+
+//go:embed web/global.js
+var globalJs []byte
+
+//go:embed web/gallery/gallery.js
+var galleryJs []byte
+
+//go:embed web/gallery/player.js
+var playerJs []byte
 
 type Config struct {
 	// Root path of remote public server where media is stored
@@ -53,7 +79,8 @@ var funcs = template.FuncMap{
 	"isVideo": isVideo,
 }
 
-var tmpl *template.Template = template.Must(template.New("").Funcs(funcs).ParseGlob("pages/gallery/*.html"))
+// Load template pages files
+var tmpl *template.Template = template.Must(template.New("").Funcs(funcs).ParseFS(galleryDir, "web/gallery/*.html"))
 
 type MediaFileType int64
 
@@ -94,6 +121,7 @@ type AlbumsPage struct {
 	Albums   []Album
 	BackLink string
 	Styles   template.CSS
+	JS       template.JS
 }
 
 type GalleryPage struct {
@@ -101,6 +129,7 @@ type GalleryPage struct {
 	Images       []Media
 	BackLink     string
 	Styles       template.CSS
+	JS           template.JS
 	PageSettings PageSettings
 }
 
@@ -109,6 +138,7 @@ type PlayerPage struct {
 	Image    LinkedMedia
 	BackLink string
 	Styles   template.CSS
+	JS       template.JS
 }
 
 const (
@@ -190,20 +220,6 @@ func readFile(path string) ([]byte, error) {
 	return bytes, nil
 }
 
-func getCss(path string) (template.CSS, error) {
-	css, err := readFile(path)
-	if err != nil {
-		return "", err
-	}
-
-	globalCss, err := readFile("public/global.css")
-	if err != nil {
-		return "", err
-	}
-
-	return template.CSS(append(css, globalCss...)), nil
-}
-
 func getMediaType(filePath string) MediaFileType {
 	ext := strings.ToLower(filepath.Ext(filePath))
 
@@ -281,19 +297,14 @@ func makeLinkMedia(m Media, images []fs.DirEntry) (LinkedMedia, error) {
 // albumsHandler renders folders in given directory as albums
 func albumsHandler(albums []Album, backLink string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		styles, err := getCss("public/gallery/album.css")
-		if err != nil {
-			writeError(w, http.StatusInternalServerError, err.Error())
-			return
-		}
-
 		pageData := AlbumsPage{
 			Albums:   albums,
 			BackLink: backLink,
-			Styles:   styles,
+			Styles:   template.CSS(append(albumCss, globalCss...)),
+			JS:       template.JS(globalJs),
 		}
 
-		err = tmpl.ExecuteTemplate(w, "album.html", pageData)
+		err := tmpl.ExecuteTemplate(w, "album.html", pageData)
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
@@ -304,19 +315,14 @@ func albumsHandler(albums []Album, backLink string) http.HandlerFunc {
 // playerHandler render individual media on it's own page
 func playerHandler(li LinkedMedia, backLink string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		styles, err := getCss("public/gallery/player.css")
-		if err != nil {
-			writeError(w, http.StatusInternalServerError, err.Error())
-			return
-		}
-
 		post := PlayerPage{
 			Image:    li,
 			BackLink: backLink,
-			Styles:   styles,
+			Styles:   template.CSS(append(playerCss, globalCss...)),
+			JS:       template.JS(append(globalJs, playerJs...)),
 		}
 
-		err = tmpl.ExecuteTemplate(w, "player.html", post)
+		err := tmpl.ExecuteTemplate(w, "player.html", post)
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
@@ -327,21 +333,16 @@ func playerHandler(li LinkedMedia, backLink string) http.HandlerFunc {
 // galleryHandler renders folder with images as a gallery
 func galleryHandler(media []Media, title string, backLink string, settings PageSettings) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		styles, err := getCss("public/gallery/gallery.css")
-		if err != nil {
-			writeError(w, http.StatusInternalServerError, err.Error())
-			return
-		}
-
 		gallery := GalleryPage{
 			Title:        title,
 			Images:       media,
 			BackLink:     backLink,
-			Styles:       styles,
+			Styles:       template.CSS(append(galleryCss, globalCss...)),
 			PageSettings: settings,
+			JS:           template.JS(append(globalJs, galleryJs...)),
 		}
 
-		err = tmpl.ExecuteTemplate(w, "gallery.html", gallery)
+		err := tmpl.ExecuteTemplate(w, "gallery.html", gallery)
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
@@ -556,7 +557,9 @@ func makeGalleryRootHandler(fSys fs.FS) func(w http.ResponseWriter, r *http.Requ
 				return
 			}
 
-			playerHandler(li, path.Dir(m.UrlPath))(w, r)
+			backLink := path.Dir(m.UrlPath) + "?p=" + path.Base(m.UrlPath)
+
+			playerHandler(li, backLink)(w, r)
 
 			return
 		}
@@ -566,7 +569,6 @@ func makeGalleryRootHandler(fSys fs.FS) func(w http.ResponseWriter, r *http.Requ
 
 			var albums []Album
 			for _, i := range fsItems.Folders {
-
 				albums = append(albums, Album{
 					Name: i.Name(),
 					Link: path.Join(config.ServerRoot, r.URL.Path, i.Name()),

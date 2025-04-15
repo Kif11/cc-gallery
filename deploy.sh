@@ -7,17 +7,9 @@ ssh -t codercat "sudo systemctl stop codercat-gallery.service"
 # Sync server binary
 scp bin/gallery codercat:~/gallery/gallery
 
-# Print disc usage
-# ssh -t codercat "df -h --total"
-
-# Sync assets
-# rsync -avu -p --chmod=Du=rwx,Dg=rx,Do=rx,Fu=rw,Fg=r,Fo=r ./public/media/kif/ codercat:~/gallery/public/media/kif
-# rsync -avu -p --chmod=Du=rwx,Dg=rx,Do=rx,Fu=rw,Fg=r,Fo=r --exclude 'story_*' ./public/media/snay/ codercat:~/gallery/public/media/snay
-
-rsync -avu -p --chmod=Du=rwx,Dg=rx,Do=rx,Fu=rw,Fg=r,Fo=r ./public/gallery/ codercat:~/gallery/public/gallery
-rsync -avu -p --chmod=Du=rwx,Dg=rx,Do=rx,Fu=rw,Fg=r,Fo=r ./public/*.css codercat:~/gallery/public
-
-rsync -avu --delete -p ./pages/ codercat:~/gallery/pages
+# (Optional) Sync images and video files if using local gallery
+# rsync -avu -p --chmod=Du=rwx,Dg=rx,Do=rx,Fu=rw,Fg=r,Fo=r ./assets/media/kif/ codercat:~/gallery/assets/media/kif
+# rsync -avu -p --chmod=Du=rwx,Dg=rx,Do=rx,Fu=rw,Fg=r,Fo=r --exclude 'story_*' ./assets/media/snay/ codercat:~/gallery/assets/media/snay
 
 # Restart service
 ssh -t codercat "sudo systemctl start codercat-gallery.service"

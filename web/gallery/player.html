@@ -39,7 +39,7 @@
       <a class="btn prev" href="{{.Image.Prev.UrlPath}}">Prev</a>
       {{end}}
     </div>
-    <a class="btn back" href="{{.BackLink}}">Back</a>
+    <a class="btn back" href="{{.BackLink}}">Gallery</a>
     <div class="right">
       {{if ne .Image.Next.FileName ""}}
       <a class="btn next" href="{{.Image.Next.UrlPath}}">Next</a>
@@ -47,41 +47,10 @@
     </div>
   </div>
 
+  <script src="global.js"></script>
+
   <script>
-    const nextLink = document.querySelector(".next");
-    const prevLink = document.querySelector(".prev");
-    const videoEl = document.querySelector("video");
-
-    function goBackToGalery() {
-      let backLink = "{{.BackLink}}"
-
-      // Restore query parameter from session storage
-      const queryParams = sessionStorage.getItem("queryParams");
-      if (queryParams) {
-        backLink = "{{.BackLink}}/" + queryParams
-      }
-
-      window.location.replace("{{.BackLink}}/" + queryParams);
-      sessionStorage.removeItem("queryParams");
-    }
-
-    document.addEventListener("keydown", (e) => {
-      switch (e.key) {
-        case "ArrowLeft":
-          prevLink.click();
-          break;
-        case "ArrowRight":
-          nextLink.click();
-          break;
-        case "ArrowUp": {
-          goBackToGalery();
-          break;
-        }
-        case "m":
-          videoEl.muted = !videoEl.muted;
-          break;
-      }
-    });
+    {{.JS}}
   </script>
 </body>
 

@@ -2,7 +2,7 @@
 /gallery
 /bin
 /tmp
-/public/media*
+/assets/media*
 .DS_*
 settings.json
 .env

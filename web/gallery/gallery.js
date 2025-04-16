@@ -41,7 +41,7 @@ function updateCurrentMediaInURL(visibleElements) {
     url.searchParams.set('p', mediaName);
 
     // Update URL without reloading the page
-    window.history.pushState(null, '', url.toString());
+    window.history.replaceState(null, '', url.toString());
 }
 
 // Update filter cookie and input value
@@ -64,6 +64,9 @@ function updateFilter() {
 
 function loadVisibleElements(els) {
     els.forEach(el => {
+        if (el.hasAttribute("src")) {
+            return;
+        }
         el.setAttribute("src", el.dataset.url);
     });
 }
@@ -112,8 +115,9 @@ function setHotkeys() {
         }
     });
 }
-
+console.log("script")
 document.addEventListener("DOMContentLoaded", () => {
+    console.log("DOMContentLoaded")
     setHotkeys()
     lazyLoadMedia()
     updateFilter()

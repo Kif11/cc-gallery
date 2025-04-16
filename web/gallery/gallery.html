@@ -37,9 +37,9 @@
         <!-- <p>{{.PublicPath}}</p> -->
         <a href="{{.AbsolutePageURL}}">
           {{if isImage .FileName}}
-          <img class="lazy" src="" data-url="{{.PublicPath}}" />
+          <img class="lazy" data-url="{{.PublicPath}}" />
           {{else if isVideo .FileName}}
-          <video class="lazy" src="" data-url="{{.PublicPath}}" muted autoplay loop />
+          <video class="lazy" data-url="{{.PublicPath}}" muted autoplay loop />
           {{end}}
         </a>
       </div>

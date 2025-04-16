@@ -5,7 +5,6 @@ import (
 	_ "embed"
 	"fmt"
 	"html/template"
-	"io"
 	"io/fs"
 	"log"
 	"net/http"
@@ -100,9 +99,9 @@ type Media struct {
 	// Full disc path to the asset on the server /homes/bob/public/media/kif/2024/1234_post_0.jpg
 	LocalPath string
 	// Relative URL path as accessed by the client when browsing e.g. kif/2024, snay/2022/myAlbum
-	RelativeURL string
+	RelativePageURL string
 	// Full path to the page where asset is rendered e.g. example.com/gallery/kif/2024
-	UrlPath string
+	AbsolutePageURL string
 }
 
 type LinkedMedia struct {
@@ -205,21 +204,6 @@ func writeError(w http.ResponseWriter, header int, msg string) {
 	w.Write([]byte(msg))
 }
 
-func readFile(path string) ([]byte, error) {
-	file, err := os.Open(path)
-	if err != nil {
-		return []byte{}, err
-	}
-	defer file.Close()
-
-	bytes, err := io.ReadAll(file)
-	if err != nil {
-		return bytes, err
-	}
-
-	return bytes, nil
-}
-
 func getMediaType(filePath string) MediaFileType {
 	ext := strings.ToLower(filepath.Ext(filePath))
 
@@ -245,12 +229,12 @@ func makeMedia(url string, config Config) Media {
 	}
 
 	return Media{
-		Type:        getMediaType(fName),
-		FileName:    fName,
-		PublicPath:  fmt.Sprintf("%s/%s", config.CDNRoot, relativePath),
-		RelativeURL: relativePath,
-		LocalPath:   path.Join(config.LocalRoot, relativePath),
-		UrlPath:     path.Join(config.ServerRoot, relativePath),
+		Type:            getMediaType(fName),
+		FileName:        fName,
+		PublicPath:      fmt.Sprintf("%s/%s", config.CDNRoot, relativePath),
+		RelativePageURL: relativePath,
+		LocalPath:       path.Join(config.LocalRoot, relativePath),
+		AbsolutePageURL: path.Join(config.ServerRoot, relativePath),
 	}
 }
 
@@ -258,7 +242,7 @@ func makeMedia(url string, config Config) Media {
 func makeLinkMedia(m Media, images []fs.DirEntry) (LinkedMedia, error) {
 	li := LinkedMedia{}
 
-	settings := pageSettingsForPath(m.RelativeURL, pageSettings)
+	settings := pageSettingsForPath(m.RelativePageURL, pageSettings)
 	sortedMedia := sortDirEntries(images, settings.MediaOrder)
 
 	for i := 0; i < len(sortedMedia); i++ {
@@ -278,14 +262,14 @@ func makeLinkMedia(m Media, images []fs.DirEntry) (LinkedMedia, error) {
 
 		if i == 0 {
 			// First item
-			li.Next = makeMedia(path.Join(path.Dir(m.RelativeURL), images[i+1].Name()), config)
+			li.Next = makeMedia(path.Join(path.Dir(m.RelativePageURL), images[i+1].Name()), config)
 		} else if i == len(images)-1 {
 			// Last item
-			li.Prev = makeMedia(path.Join(path.Dir(m.RelativeURL), images[i-1].Name()), config)
+			li.Prev = makeMedia(path.Join(path.Dir(m.RelativePageURL), images[i-1].Name()), config)
 		} else {
 			// Middle item
-			li.Next = makeMedia(path.Join(path.Dir(m.RelativeURL), images[i+1].Name()), config)
-			li.Prev = makeMedia(path.Join(path.Dir(m.RelativeURL), images[i-1].Name()), config)
+			li.Next = makeMedia(path.Join(path.Dir(m.RelativePageURL), images[i+1].Name()), config)
+			li.Prev = makeMedia(path.Join(path.Dir(m.RelativePageURL), images[i-1].Name()), config)
 		}
 
 		return li, nil
@@ -364,6 +348,9 @@ func getEnv(name string, fallback string) string {
 }
 
 func s3List() ([]string, error) {
+
+	// TODO: Make it configurable
+
 	endpoint := "nyc3.digitaloceanspaces.com"
 	region := "nyc3"
 
@@ -372,7 +359,7 @@ func s3List() ([]string, error) {
 	secret := getEnv("SPACES_SECRET", "")
 	galleryFolder := "gallery"
 
-	// TODO Check of env var defined
+	// TODO: Check of env var defined
 
 	s3Config := &aws.Config{
 		Credentials: credentials.NewStaticCredentials(key, secret, ""),
@@ -410,6 +397,8 @@ func s3List() ([]string, error) {
 	return names, nil
 }
 
+// Returns `update` function which can be used to refresh s3 entried
+// that cached in memory map
 func digitalOceanSpacesFS() (fs.FS, func() error) {
 	var s3Fs fstest.MapFS = make(map[string]*fstest.MapFile)
 
@@ -527,6 +516,8 @@ func valueFromCookies(cookies []*http.Cookie, name string) string {
 func makeGalleryRootHandler(fSys fs.FS) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 
+		fmt.Printf("[D] r.URL.Path: %s\n", r.URL.Path)
+
 		m := makeMedia(r.URL.Path, config)
 
 		searchPath := m.LocalPath
@@ -540,7 +531,7 @@ func makeGalleryRootHandler(fSys fs.FS) func(w http.ResponseWriter, r *http.Requ
 			return
 		}
 
-		settings := pageSettingsForPath(m.RelativeURL, pageSettings)
+		settings := pageSettingsForPath(m.RelativePageURL, pageSettings)
 		filter := valueFromCookies(r.Cookies(), "filter")
 		if filter == "" {
 			filter = r.URL.Query().Get("filter")
@@ -557,7 +548,7 @@ func makeGalleryRootHandler(fSys fs.FS) func(w http.ResponseWriter, r *http.Requ
 				return
 			}
 
-			backLink := path.Dir(m.UrlPath) + "?p=" + path.Base(m.UrlPath)
+			backLink := path.Dir(m.AbsolutePageURL) + "?p=" + path.Base(m.AbsolutePageURL)
 
 			playerHandler(li, backLink)(w, r)
 
@@ -599,11 +590,11 @@ func makeGalleryRootHandler(fSys fs.FS) func(w http.ResponseWriter, r *http.Requ
 
 			var media []Media
 			for _, f := range sortedFsEntries {
-				mi := makeMedia(path.Join(m.RelativeURL, f.Name()), config)
+				mi := makeMedia(path.Join(m.RelativePageURL, f.Name()), config)
 				media = append(media, mi)
 			}
 
-			galleryHandler(media, m.RelativeURL, path.Dir(m.UrlPath), settings)(w, r)
+			galleryHandler(media, m.RelativePageURL, path.Dir(m.AbsolutePageURL), settings)(w, r)
 
 			return
 		}
@@ -626,16 +617,12 @@ func makeUpdateHandler(update func() error) func(w http.ResponseWriter, r *http.
 }
 
 func rootHandler(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintf(w, "🐈\n")
+	http.Redirect(w, r, config.ServerRoot, http.StatusFound)
 }
 
 func main() {
 	mux := http.NewServeMux()
 	galleryMux := http.NewServeMux()
-
-	// Handle public assets from public directory under example.com/assets URL
-	fs := http.FileServer(http.Dir("public"))
-	mux.Handle("/public/", http.StripPrefix("/public", fs))
 
 	dirs, update := digitalOceanSpacesFS()
 

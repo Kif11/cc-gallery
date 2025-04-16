@@ -1,64 +1,51 @@
-const backLink = document.querySelector(".back");
+const getFileName = (path) => path.split("/").slice(-1).pop()
 
-document.addEventListener("keydown", (e) => {
-    switch (e.key) {
-        case "ArrowUp":
-            backLink.click();
-            break;
-    }
-});
+// Restore scroll position from URL parameter
+function scrollMediaIntoView() {
+    const curMedia = new URLSearchParams(window.location.search).get('p')
 
-document.addEventListener("DOMContentLoaded", () => {
-    const lazyMediaEls = document.querySelectorAll(".lazy");
-    let scrollTimeout;
-    let visibleElements = new Set();
-
-    // Function to load visible elements
-    function loadVisibleElements() {
-        visibleElements.forEach(el => {
-            el.setAttribute("src", el.dataset.url);
-        });
+    if (!curMedia) {
+        return
     }
 
-    function updateURL() {
-        if (visibleElements.size < 2) {
+    const allMedia = document.querySelectorAll(".lazy");
+
+    allMedia.forEach((m) => {
+        const mediaName = getFileName(m.dataset.url)
+
+        if (mediaName !== curMedia) {
             return
         }
-        // TODO: Cleanup
-        const m = Array.from(visibleElements)[Math.floor(visibleElements.size/2)];
-        const mediaName = m.dataset.url.split("/").slice(-1).pop()
-        const url = new URL(window.location.href);
-        url.searchParams.set('p', mediaName);
-        window.history.pushState(null, '', url.toString());
+
+        m.scrollIntoView({
+            behavior: "instant",
+            blocl: "center",
+            inline: 'center'
+        })
+    })
+}
+
+// We keep track of current media that need to be scrolled into view via URL "p" paramenter
+// this function updates it as user scroll the gallery
+function updateCurrentMediaInURL(visibleElements) {
+    if (visibleElements.size < 2) {
+        return
     }
 
-    let mediaLoadObs = new IntersectionObserver(function (entries, observer) {
-        entries.forEach((entry) => {
-            if (entry.isIntersecting) {
-                visibleElements.add(entry.target);
-            } else {
-                visibleElements.delete(entry.target);
-            }
-        });
-    }, { rootMargin: '100px 0px', threshold: 0.1 });
+    // Pick middle media elemnt from visible media on the screen
+    const middle = Array.from(visibleElements)[Math.floor(visibleElements.size / 2)];
+    const mediaName = getFileName(middle.dataset.url)
 
-    lazyMediaEls.forEach((el) => {
-        mediaLoadObs.observe(el);
-    });
+    // Make new URL query parameters
+    const url = new URL(window.location.href);
+    url.searchParams.set('p', mediaName);
 
-    // Load images when scrolling stops
-    window.addEventListener('scroll', () => {
-        clearTimeout(scrollTimeout);
-        scrollTimeout = setTimeout(() => {
-            loadVisibleElements()
-            updateURL()
-        }, 150); // Wait 150ms after scroll stops
-    });
+    // Update URL without reloading the page
+    window.history.pushState(null, '', url.toString());
+}
 
-    // Also load images on initial page load
-    setTimeout(loadVisibleElements, 150);
-
-
+// Update filter cookie and input value
+function updateFilter() {
     const searchParams = new URLSearchParams(window.location.search);
     const queryFilter = searchParams.get('filter')
 
@@ -73,19 +60,64 @@ document.addEventListener("DOMContentLoaded", () => {
             input.value = filter;
         }
     }
+}
 
-    // Restore scroll position from URL parameter
-    const curMedia = searchParams.get('p')
+function loadVisibleElements(els) {
+    els.forEach(el => {
+        el.setAttribute("src", el.dataset.url);
+    });
+}
 
-    if (curMedia) {
-        const allMedia = document.querySelectorAll(".lazy");
-        allMedia.forEach((m) => {
-            const mediaName = m.dataset.url.split("/").slice(-1).pop()
-            if (mediaName === curMedia) {
-                m.scrollIntoView()
+// Watch for media withing viepor and load it as it come to view
+function lazyLoadMedia() {
+    const lazyMediaEls = document.querySelectorAll(".lazy");
+    let scrollTimeout;
+    let visibleElements = new Set();
+
+    let mediaLoadObs = new IntersectionObserver(function (entries, observer) {
+        entries.forEach((entry) => {
+            if (entry.isIntersecting) {
+                visibleElements.add(entry.target);
+            } else {
+                visibleElements.delete(entry.target);
             }
-        })
-    }
+        });
+    });
+
+    lazyMediaEls.forEach((el) => {
+        mediaLoadObs.observe(el);
+    });
+
+    // Load images and update URL when scrolling stops
+    window.addEventListener('scroll', () => {
+        clearTimeout(scrollTimeout);
+        scrollTimeout = setTimeout(() => {
+            loadVisibleElements(visibleElements)
+            updateCurrentMediaInURL(visibleElements)
+        }, 150); // Wait 150ms after scroll stops
+    });
+
+    // Also load images on initial page load
+    setTimeout(() => loadVisibleElements(visibleElements), 150);
+}
+
+function setHotkeys() {
+    const backLink = document.querySelector(".back");
+
+    document.addEventListener("keydown", (e) => {
+        switch (e.key) {
+            case "ArrowUp":
+                backLink.click();
+                break;
+        }
+    });
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+    setHotkeys()
+    lazyLoadMedia()
+    updateFilter()
+    scrollMediaIntoView()
 });
 
 // Handle user filter action by setting cookie from filter input

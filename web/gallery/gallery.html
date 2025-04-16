@@ -35,7 +35,7 @@
       {{range .Images}}
       <div class="image">
         <!-- <p>{{.PublicPath}}</p> -->
-        <a href="{{.UrlPath}}">
+        <a href="{{.AbsolutePageURL}}">
           {{if isImage .FileName}}
           <img class="lazy" src="" data-url="{{.PublicPath}}" />
           {{else if isVideo .FileName}}

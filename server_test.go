@@ -11,20 +11,20 @@ func TestMakePathFromUrl(t *testing.T) {
 		expectedMedia Media
 	}{
 		{"directory/", Media{
-			Type:        Directory,
-			PublicPath:  "/public/media/directory",
-			FileName:    "",
-			LocalPath:   "/home/bob/media/directory",
-			RelativeURL: "directory",
-			UrlPath:     "/gallery/directory",
+			Type:            Directory,
+			PublicPath:      "/public/media/directory",
+			FileName:        "",
+			LocalPath:       "/home/bob/media/directory",
+			RelativePageURL: "directory",
+			AbsolutePageURL: "/gallery/directory",
 		}},
 		{"directory/file.jpg", Media{
-			Type:        Image,
-			PublicPath:  "/public/media/directory/file.jpg",
-			FileName:    "file.jpg",
-			LocalPath:   "/home/bob/media/directory/file.jpg",
-			RelativeURL: "directory/file.jpg",
-			UrlPath:     "/gallery/directory/file.jpg",
+			Type:            Image,
+			PublicPath:      "/public/media/directory/file.jpg",
+			FileName:        "file.jpg",
+			LocalPath:       "/home/bob/media/directory/file.jpg",
+			RelativePageURL: "directory/file.jpg",
+			AbsolutePageURL: "/gallery/directory/file.jpg",
 		}},
 	}
 
@@ -47,11 +47,11 @@ func TestMakePathFromUrl(t *testing.T) {
 			if media.LocalPath != test.expectedMedia.LocalPath {
 				t.Errorf("Expected LocalPath %v, got %v", test.expectedMedia.LocalPath, media.LocalPath)
 			}
-			if media.RelativeURL != test.expectedMedia.RelativeURL {
-				t.Errorf("Expected RelativeURL %v, got %v", test.expectedMedia.RelativeURL, media.RelativeURL)
+			if media.RelativePageURL != test.expectedMedia.RelativePageURL {
+				t.Errorf("Expected RelativeURL %v, got %v", test.expectedMedia.RelativePageURL, media.RelativePageURL)
 			}
-			if media.UrlPath != test.expectedMedia.UrlPath {
-				t.Errorf("Expected UrlPath %v, got %v", test.expectedMedia.UrlPath, media.UrlPath)
+			if media.AbsolutePageURL != test.expectedMedia.AbsolutePageURL {
+				t.Errorf("Expected AbsolutePageURL %v, got %v", test.expectedMedia.AbsolutePageURL, media.AbsolutePageURL)
 			}
 			if media.FileName != test.expectedMedia.FileName {
 				t.Errorf("Expected FileName %v, got %v", test.expectedMedia.FileName, media.FileName)

@@ -36,19 +36,16 @@
   <div class="navbar">
     <div class="left">
       {{if ne .Image.Prev.FileName ""}}
-      <a class="btn prev" href="{{.Image.Prev.UrlPath}}">Prev</a>
+      <a class="btn prev" href="{{.Image.Prev.AbsolutePageURL}}">Prev</a>
       {{end}}
     </div>
     <a class="btn back" href="{{.BackLink}}">Gallery</a>
     <div class="right">
       {{if ne .Image.Next.FileName ""}}
-      <a class="btn next" href="{{.Image.Next.UrlPath}}">Next</a>
+      <a class="btn next" href="{{.Image.Next.AbsolutePageURL}}">Next</a>
       {{end}}
     </div>
   </div>
-
-  <script src="global.js"></script>
-
   <script>
     {{.JS}}
   </script>

@@ -17,38 +17,46 @@ document.addEventListener("DOMContentLoaded", () => {
     function loadVisibleElements() {
         visibleElements.forEach(el => {
             el.setAttribute("src", el.dataset.url);
-            visibleElements.delete(el);
         });
     }
 
-    if ("IntersectionObserver" in window) {
-        let mediaLoadObs = new IntersectionObserver(function (entries, observer) {
-
-            entries.forEach((entry) => {
-                if (entry.isIntersecting) {
-                    visibleElements.add(entry.target);
-                } else {
-                    visibleElements.delete(entry.target);
-                }
-            });
-        }, {
-            rootMargin: '100px 0px', // Increase buffer zone since we're loading on scroll stop
-            threshold: 0.1
-        });
-
-        lazyMediaEls.forEach((el) => {
-            mediaLoadObs.observe(el);
-        });
-
-        // Load images when scrolling stops
-        window.addEventListener('scroll', () => {
-            clearTimeout(scrollTimeout);
-            scrollTimeout = setTimeout(loadVisibleElements, 150); // Wait 150ms after scroll stops
-        });
-
-        // Also load images on initial page load
-        setTimeout(loadVisibleElements, 150);
+    function updateURL() {
+        if (visibleElements.size < 2) {
+            return
+        }
+        // TODO: Cleanup
+        const m = Array.from(visibleElements)[Math.floor(visibleElements.size/2)];
+        const mediaName = m.dataset.url.split("/").slice(-1).pop()
+        const url = new URL(window.location.href);
+        url.searchParams.set('p', mediaName);
+        window.history.pushState(null, '', url.toString());
     }
+
+    let mediaLoadObs = new IntersectionObserver(function (entries, observer) {
+        entries.forEach((entry) => {
+            if (entry.isIntersecting) {
+                visibleElements.add(entry.target);
+            } else {
+                visibleElements.delete(entry.target);
+            }
+        });
+    }, { rootMargin: '100px 0px', threshold: 0.1 });
+
+    lazyMediaEls.forEach((el) => {
+        mediaLoadObs.observe(el);
+    });
+
+    // Load images when scrolling stops
+    window.addEventListener('scroll', () => {
+        clearTimeout(scrollTimeout);
+        scrollTimeout = setTimeout(() => {
+            loadVisibleElements()
+            updateURL()
+        }, 150); // Wait 150ms after scroll stops
+    });
+
+    // Also load images on initial page load
+    setTimeout(loadVisibleElements, 150);
 
 
     const searchParams = new URLSearchParams(window.location.search);
@@ -90,4 +98,3 @@ document.getElementById("clear-filter").addEventListener("click", function (even
     eraseCookie("filter");
     input.value = "";
 });
-

@@ -109,12 +109,12 @@ type LinkedMedia struct {
 }
 
 type GalleryPage struct {
-	Title        string
-	Images       []Media
-	BackLink     string
-	Styles       template.CSS
-	JS           template.JS
-	PageSettings PageSettings
+	Title    string
+	Images   []Media
+	BackLink string
+	Styles   template.CSS
+	JS       template.JS
+	GridSize string
 }
 
 type PlayerPage struct {
@@ -123,36 +123,6 @@ type PlayerPage struct {
 	BackLink string
 	Styles   template.CSS
 	JS       template.JS
-}
-
-type PageSettings struct {
-	Path     string
-	GridSize string
-}
-
-var pageSettings = []PageSettings{
-	{
-		Path:     "kif",
-		GridSize: "300px",
-	},
-	{
-		Path:     "snay",
-		GridSize: "200px",
-	},
-}
-
-func pageSettingsForPath(p string, settings []PageSettings) PageSettings {
-	match := PageSettings{
-		GridSize: "300px",
-	}
-
-	for _, s := range settings {
-		if strings.HasPrefix(p, s.Path) {
-			match = s
-		}
-	}
-
-	return match
 }
 
 func writeError(w http.ResponseWriter, header int, msg string) {
@@ -468,15 +438,21 @@ func playerHandler(li LinkedMedia, backLink string) http.HandlerFunc {
 }
 
 // galleryHandler renders folder with images as a gallery
-func galleryHandler(media []Media, title string, backLink string, settings PageSettings) http.HandlerFunc {
+func galleryHandler(media []Media, title string, backLink string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		// Get grid size from URL parameter, default to 300px if not specified
+		gridSize := r.URL.Query().Get("grid")
+		if gridSize == "" {
+			gridSize = "300px"
+		}
+
 		gallery := GalleryPage{
-			Title:        title,
-			Images:       media,
-			BackLink:     backLink,
-			Styles:       template.CSS(append(galleryCss, globalCss...)),
-			PageSettings: settings,
-			JS:           template.JS(append(globalJs, galleryJs...)),
+			Title:    title,
+			Images:   media,
+			BackLink: backLink,
+			Styles:   template.CSS(append(galleryCss, globalCss...)),
+			GridSize: gridSize,
+			JS:       template.JS(append(globalJs, galleryJs...)),
 		}
 
 		err := tmpl.ExecuteTemplate(w, "gallery.html", gallery)
@@ -503,7 +479,6 @@ func makeGalleryRootHandler(fSys fs.FS) func(w http.ResponseWriter, r *http.Requ
 			return
 		}
 
-		settings := pageSettingsForPath(m.RelativePageURL, pageSettings)
 		filter := valueFromCookies(r.Cookies(), "filter")
 		if filter == "" {
 			filter = r.URL.Query().Get("filter")
@@ -536,7 +511,7 @@ func makeGalleryRootHandler(fSys fs.FS) func(w http.ResponseWriter, r *http.Requ
 				media = append(media, mi)
 			}
 
-			galleryHandler(media, m.RelativePageURL, path.Dir(m.AbsolutePageURL), settings)(w, r)
+			galleryHandler(media, m.RelativePageURL, path.Dir(m.AbsolutePageURL))(w, r)
 		}
 	}
 }

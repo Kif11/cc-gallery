@@ -125,36 +125,25 @@ type PlayerPage struct {
 	JS       template.JS
 }
 
-const (
-	NewFirst MediaOrder = "new_first"
-	OldFirst MediaOrder = "old_first"
-)
-
-type MediaOrder string
-
 type PageSettings struct {
-	Path       string
-	GridSize   string
-	MediaOrder MediaOrder
+	Path     string
+	GridSize string
 }
 
 var pageSettings = []PageSettings{
 	{
-		Path:       "kif",
-		GridSize:   "300px",
-		MediaOrder: NewFirst,
+		Path:     "kif",
+		GridSize: "300px",
 	},
 	{
-		Path:       "snay",
-		GridSize:   "200px",
-		MediaOrder: NewFirst,
+		Path:     "snay",
+		GridSize: "200px",
 	},
 }
 
 func pageSettingsForPath(p string, settings []PageSettings) PageSettings {
 	match := PageSettings{
-		GridSize:   "300px",
-		MediaOrder: NewFirst,
+		GridSize: "300px",
 	}
 
 	for _, s := range settings {
@@ -210,8 +199,7 @@ func makeMedia(url string, config Config) Media {
 func makeLinkMedia(m Media, images []fs.DirEntry) (LinkedMedia, error) {
 	li := LinkedMedia{}
 
-	settings := pageSettingsForPath(m.RelativePageURL, pageSettings)
-	sortedMedia := sortDirEntries(images, settings.MediaOrder)
+	sortedMedia := sortDirEntries(images)
 
 	for i := 0; i < len(sortedMedia); i++ {
 		f := sortedMedia[i]
@@ -244,44 +232,6 @@ func makeLinkMedia(m Media, images []fs.DirEntry) (LinkedMedia, error) {
 	}
 
 	return li, fmt.Errorf("image with id %s not found", m.FileName)
-}
-
-// playerHandler render individual media on it's own page
-func playerHandler(li LinkedMedia, backLink string) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		post := PlayerPage{
-			Image:    li,
-			BackLink: backLink,
-			Styles:   template.CSS(append(playerCss, globalCss...)),
-			JS:       template.JS(append(globalJs, playerJs...)),
-		}
-
-		err := tmpl.ExecuteTemplate(w, "player.html", post)
-		if err != nil {
-			writeError(w, http.StatusInternalServerError, err.Error())
-			return
-		}
-	}
-}
-
-// galleryHandler renders folder with images as a gallery
-func galleryHandler(media []Media, title string, backLink string, settings PageSettings) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		gallery := GalleryPage{
-			Title:        title,
-			Images:       media,
-			BackLink:     backLink,
-			Styles:       template.CSS(append(galleryCss, globalCss...)),
-			PageSettings: settings,
-			JS:           template.JS(append(globalJs, galleryJs...)),
-		}
-
-		err := tmpl.ExecuteTemplate(w, "gallery.html", gallery)
-		if err != nil {
-			writeError(w, http.StatusInternalServerError, err.Error())
-			return
-		}
-	}
 }
 
 func isDir(path string) bool {
@@ -397,7 +347,7 @@ func listFsItems(fSys fs.FS, path string) ([]fs.DirEntry, error) {
 	return fsItems, nil
 }
 
-func sortDirEntries(files []fs.DirEntry, order MediaOrder) []fs.DirEntry {
+func sortDirEntries(files []fs.DirEntry) []fs.DirEntry {
 	sort.Slice(files, func(i, j int) bool {
 		// First check if either is a directory
 		iIsDir := files[i].IsDir()
@@ -417,27 +367,13 @@ func sortDirEntries(files []fs.DirEntry, order MediaOrder) []fs.DirEntry {
 			// Compare each numeric value in sequence
 			for k := 0; k < len(nums1) && k < len(nums2); k++ {
 				if nums1[k] != nums2[k] {
-					switch order {
-					case NewFirst:
-						return nums1[k] > nums2[k]
-					case OldFirst:
-						return nums1[k] < nums2[k]
-					default:
-						return nums1[k] > nums2[k]
-					}
+					return nums1[k] > nums2[k]
 				}
 			}
 
 			// If all numbers are equal up to the shorter length, compare lengths
 			if len(nums1) != len(nums2) {
-				switch order {
-				case NewFirst:
-					return len(nums1) > len(nums2)
-				case OldFirst:
-					return len(nums1) < len(nums2)
-				default:
-					return len(nums1) > len(nums2)
-				}
+				return len(nums1) > len(nums2)
 			}
 		}
 
@@ -513,6 +449,45 @@ func valueFromCookies(cookies []*http.Cookie, name string) string {
 	return ""
 }
 
+// playerHandler render individual media on it's own page
+func playerHandler(li LinkedMedia, backLink string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		post := PlayerPage{
+			Image:    li,
+			BackLink: backLink,
+			Styles:   template.CSS(append(playerCss, globalCss...)),
+			JS:       template.JS(append(globalJs, playerJs...)),
+		}
+
+		err := tmpl.ExecuteTemplate(w, "player.html", post)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+	}
+}
+
+// galleryHandler renders folder with images as a gallery
+func galleryHandler(media []Media, title string, backLink string, settings PageSettings) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		gallery := GalleryPage{
+			Title:        title,
+			Images:       media,
+			BackLink:     backLink,
+			Styles:       template.CSS(append(galleryCss, globalCss...)),
+			PageSettings: settings,
+			JS:           template.JS(append(globalJs, galleryJs...)),
+		}
+
+		err := tmpl.ExecuteTemplate(w, "gallery.html", gallery)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+	}
+}
+
+// Root handler that select apropriate HTTP handler depending on the route requested
 func makeGalleryRootHandler(fSys fs.FS) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		m := makeMedia(r.URL.Path, config)
@@ -534,7 +509,7 @@ func makeGalleryRootHandler(fSys fs.FS) func(w http.ResponseWriter, r *http.Requ
 			filter = r.URL.Query().Get("filter")
 		}
 		filtered := filterDirEntries(fsItems, filter)
-		sortedFsEntries := sortDirEntries(filtered, settings.MediaOrder)
+		sortedFsEntries := sortDirEntries(filtered)
 
 		if m.Type == Image || m.Type == Video {
 			/*
@@ -566,6 +541,7 @@ func makeGalleryRootHandler(fSys fs.FS) func(w http.ResponseWriter, r *http.Requ
 	}
 }
 
+// Make handler that will update in memory media list from s3
 func makeUpdateHandler(update func() error) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		err := update()

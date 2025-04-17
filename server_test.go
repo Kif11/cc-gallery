@@ -119,110 +119,71 @@ func TestSortDirEntries(t *testing.T) {
 	tests := []struct {
 		name     string
 		files    []fs.DirEntry
-		order    MediaOrder
 		expected []string
 	}{
 		{
-			name: "new first - simple numeric comparison",
+			name: "simple numeric comparison",
 			files: []fs.DirEntry{
 				&mockDirEntry{name: "post_1.jpg"},
 				&mockDirEntry{name: "post_3.jpg"},
 				&mockDirEntry{name: "post_2.jpg"},
 			},
-			order:    NewFirst,
 			expected: []string{"post_3.jpg", "post_2.jpg", "post_1.jpg"},
 		},
 		{
-			name: "old first - simple numeric comparison",
-			files: []fs.DirEntry{
-				&mockDirEntry{name: "post_3.jpg"},
-				&mockDirEntry{name: "post_1.jpg"},
-				&mockDirEntry{name: "post_2.jpg"},
-			},
-			order:    OldFirst,
-			expected: []string{"post_1.jpg", "post_2.jpg", "post_3.jpg"},
-		},
-		{
-			name: "new first - multiple numbers in filename",
+			name: "multiple numbers in filename",
 			files: []fs.DirEntry{
 				&mockDirEntry{name: "post_2024_01_15.jpg"},
 				&mockDirEntry{name: "post_2024_01_14.jpg"},
 				&mockDirEntry{name: "post_2024_01_16.jpg"},
 			},
-			order:    NewFirst,
 			expected: []string{"post_2024_01_16.jpg", "post_2024_01_15.jpg", "post_2024_01_14.jpg"},
 		},
 		{
-			name: "new first - different number lengths",
+			name: "different number lengths",
 			files: []fs.DirEntry{
 				&mockDirEntry{name: "post_1.jpg"},
 				&mockDirEntry{name: "post_10.jpg"},
 				&mockDirEntry{name: "post_2.jpg"},
 			},
-			order:    NewFirst,
 			expected: []string{"post_10.jpg", "post_2.jpg", "post_1.jpg"},
 		},
 		{
-			name: "new first - fallback to string comparison",
+			name: "fallback to string comparison",
 			files: []fs.DirEntry{
 				&mockDirEntry{name: "post_b.jpg"},
 				&mockDirEntry{name: "post_a.jpg"},
 				&mockDirEntry{name: "post_c.jpg"},
 			},
-			order:    NewFirst,
 			expected: []string{"post_a.jpg", "post_b.jpg", "post_c.jpg"},
 		},
 		{
-			name: "new first - mixed numeric and non-numeric",
+			name: "mixed numeric and non-numeric",
 			files: []fs.DirEntry{
 				&mockDirEntry{name: "post_2.jpg"},
 				&mockDirEntry{name: "post_a.jpg"},
 				&mockDirEntry{name: "post_1.jpg"},
 			},
-			order:    NewFirst,
 			expected: []string{"post_2.jpg", "post_1.jpg", "post_a.jpg"},
 		},
 		{
-			name: "new first - timestamp based filenames",
+			name: "timestamp based filenames",
 			files: []fs.DirEntry{
 				&mockDirEntry{name: "post_1577580588_0.jpg"},
 				&mockDirEntry{name: "post_1577580588_1.jpg"},
 				&mockDirEntry{name: "post_1577580587_0.jpg"},
 				&mockDirEntry{name: "post_1577580589_0.jpg"},
 			},
-			order:    NewFirst,
 			expected: []string{"post_1577580589_0.jpg", "post_1577580588_1.jpg", "post_1577580588_0.jpg", "post_1577580587_0.jpg"},
 		},
 		{
-			name: "old first - timestamp based filenames",
-			files: []fs.DirEntry{
-				&mockDirEntry{name: "post_1577580588_1.jpg"},
-				&mockDirEntry{name: "post_1577580589_0.jpg"},
-				&mockDirEntry{name: "post_1577580587_0.jpg"},
-				&mockDirEntry{name: "post_1577580588_0.jpg"},
-			},
-			order:    OldFirst,
-			expected: []string{"post_1577580587_0.jpg", "post_1577580588_0.jpg", "post_1577580588_1.jpg", "post_1577580589_0.jpg"},
-		},
-		{
-			name: "new first - year directories",
+			name: "year directories",
 			files: []fs.DirEntry{
 				&mockDirEntry{name: "2023"},
 				&mockDirEntry{name: "2025"},
 				&mockDirEntry{name: "2024"},
 			},
-			order:    NewFirst,
 			expected: []string{"2025", "2024", "2023"},
-		},
-		{
-			name: "old first - year directories",
-			files: []fs.DirEntry{
-				&mockDirEntry{name: "2025"},
-				&mockDirEntry{name: "2023"},
-				&mockDirEntry{name: "2024"},
-			},
-			order:    OldFirst,
-			expected: []string{"2023", "2024", "2025"},
 		},
 		{
 			name: "directories before files",
@@ -232,7 +193,6 @@ func TestSortDirEntries(t *testing.T) {
 				&mockDirEntry{name: "file2.jpg"},
 				&mockDirEntry{name: "2023", isDir: true},
 			},
-			order:    NewFirst,
 			expected: []string{"2024", "2023", "file2.jpg", "file1.jpg"},
 		},
 		{
@@ -243,7 +203,6 @@ func TestSortDirEntries(t *testing.T) {
 				&mockDirEntry{name: "2024", isDir: true},
 				&mockDirEntry{name: "file.jpg"},
 			},
-			order:    NewFirst,
 			expected: []string{"2025", "2024", "2023", "file.jpg"},
 		},
 		{
@@ -254,7 +213,6 @@ func TestSortDirEntries(t *testing.T) {
 				&mockDirEntry{name: "file1.jpg"},
 				&mockDirEntry{name: "file3.jpg"},
 			},
-			order:    NewFirst,
 			expected: []string{"2024", "file3.jpg", "file2.jpg", "file1.jpg"},
 		},
 		{
@@ -265,14 +223,13 @@ func TestSortDirEntries(t *testing.T) {
 				&mockDirEntry{name: "post_1.jpg"},
 				&mockDirEntry{name: "2023", isDir: true},
 			},
-			order:    NewFirst,
 			expected: []string{"2024", "2023", "post_2.jpg", "post_1.jpg"},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := sortDirEntries(tt.files, tt.order)
+			result := sortDirEntries(tt.files)
 			if len(result) != len(tt.expected) {
 				t.Errorf("sortDirEntries() length mismatch: got %v, want %v", len(result), len(tt.expected))
 				return

@@ -17,14 +17,16 @@
   </head>
   <body>
     <section class="controlls">
+      {{if ne .BackLink "/"}}
       <a class="back" href="{{.BackLink}}">Back</a>
+      {{end}}
       <form id="filter" method="get">
         <label>Filter</label>
         <input
           id="filter-input"
           type="text"
           name="filter"
-          placeholder="post, story, igtv, mp4, jpg"
+          placeholder="e.g. post, story, igtv, mp4, jpg"
           title="Filter media by keyword in the file name. Typical media name is story_12345_0.jpg which follow the template {type}_{unix_timestamp}_{index}.{ext}"
         />
         <button id="set-filter" type="submit">Apply</button>

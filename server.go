@@ -482,6 +482,11 @@ func filterDirEntries(entries []fs.DirEntry, filter string) (filtered []fs.DirEn
 	parts := strings.Split(filter, " ")
 
 	for _, f := range entries {
+		if f.IsDir() {
+			filtered = append(filtered, f)
+			continue
+		}
+
 		for _, word := range parts {
 			if word == "" {
 				filtered = append(filtered, f)
@@ -510,9 +515,6 @@ func valueFromCookies(cookies []*http.Cookie, name string) string {
 
 func makeGalleryRootHandler(fSys fs.FS) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
-
-		fmt.Printf("[D] r.URL.Path: %s\n", r.URL.Path)
-
 		m := makeMedia(r.URL.Path, config)
 
 		searchPath := m.LocalPath

@@ -25,9 +25,9 @@
 
   <div class="ct">
     <div class="main">
-      {{if isImage .Image.Cur.FileName}}
+      {{if eq .Image.Cur.Type "Image"}}
       <img src="{{.Image.Cur.PublicPath}}" />
-      {{else if isVideo .Image.Cur.FileName}}
+      {{else if eq .Image.Cur.Type "Video"}}
       <video src="{{.Image.Cur.PublicPath}}" controls muted autoplay loop />
       {{end}}
     </div>

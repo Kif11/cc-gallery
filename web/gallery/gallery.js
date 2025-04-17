@@ -115,9 +115,8 @@ function setHotkeys() {
         }
     });
 }
-console.log("script")
+
 document.addEventListener("DOMContentLoaded", () => {
-    console.log("DOMContentLoaded")
     setHotkeys()
     lazyLoadMedia()
     updateFilter()

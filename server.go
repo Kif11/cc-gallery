@@ -28,9 +28,6 @@ var galleryDir embed.FS
 //go:embed web/global.css
 var globalCss []byte
 
-//go:embed web/gallery/album.css
-var albumCss []byte
-
 //go:embed web/gallery/player.css
 var playerCss []byte
 
@@ -74,26 +71,27 @@ var config = Config{
 }
 
 var funcs = template.FuncMap{
-	"isImage": isImage,
-	"isVideo": isVideo,
+	"myFunc": func() string { return "hi" }, // This is just a placeholder in case I need to call a function inside any template
 }
 
 // Load template pages files
 var tmpl *template.Template = template.Must(template.New("").Funcs(funcs).ParseFS(galleryDir, "web/gallery/*.html"))
 
-type MediaFileType int64
+type MediaFileType string
 
 const (
-	Other               = -1
-	Image MediaFileType = iota
-	Video
-	Directory
+	Other     = "Other"
+	Image     = "Image"
+	Video     = "Video"
+	Directory = "Directory"
 )
 
 type Media struct {
 	Type MediaFileType
 	// FileName of the file with extension e.g. 2024/1234_post_0.jpg
 	FileName string
+	// Name of the file directory
+	DirName string
 	// Full path to public CDN location of media asset
 	PublicPath string
 	// Full disc path to the asset on the server /homes/bob/public/media/kif/2024/1234_post_0.jpg
@@ -108,19 +106,6 @@ type LinkedMedia struct {
 	Cur  Media
 	Prev Media
 	Next Media
-}
-
-type Album struct {
-	Name string
-	Link string
-}
-
-type AlbumsPage struct {
-	Title    string
-	Albums   []Album
-	BackLink string
-	Styles   template.CSS
-	JS       template.JS
 }
 
 type GalleryPage struct {
@@ -181,24 +166,6 @@ func pageSettingsForPath(p string, settings []PageSettings) PageSettings {
 	return match
 }
 
-func isImage(file string) bool {
-	ext := strings.ToLower(path.Ext(file))
-	if ext == ".jpg" || ext == ".webp" || ext == ".png" || ext == ".gif" {
-		return true
-	}
-
-	return false
-}
-
-func isVideo(file string) bool {
-	ext := strings.ToLower(path.Ext(file))
-	if ext == ".mp4" || ext == ".mov" {
-		return true
-	}
-
-	return false
-}
-
 func writeError(w http.ResponseWriter, header int, msg string) {
 	w.WriteHeader(header)
 	w.Write([]byte(msg))
@@ -231,6 +198,7 @@ func makeMedia(url string, config Config) Media {
 	return Media{
 		Type:            getMediaType(fName),
 		FileName:        fName,
+		DirName:         path.Base(relativePath),
 		PublicPath:      fmt.Sprintf("%s/%s", config.CDNRoot, relativePath),
 		RelativePageURL: relativePath,
 		LocalPath:       path.Join(config.LocalRoot, relativePath),
@@ -276,24 +244,6 @@ func makeLinkMedia(m Media, images []fs.DirEntry) (LinkedMedia, error) {
 	}
 
 	return li, fmt.Errorf("image with id %s not found", m.FileName)
-}
-
-// albumsHandler renders folders in given directory as albums
-func albumsHandler(albums []Album, backLink string) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		pageData := AlbumsPage{
-			Albums:   albums,
-			BackLink: backLink,
-			Styles:   template.CSS(append(albumCss, globalCss...)),
-			JS:       template.JS(globalJs),
-		}
-
-		err := tmpl.ExecuteTemplate(w, "album.html", pageData)
-		if err != nil {
-			writeError(w, http.StatusInternalServerError, err.Error())
-			return
-		}
-	}
 }
 
 // playerHandler render individual media on it's own page
@@ -425,13 +375,8 @@ func digitalOceanSpacesFS() (fs.FS, func() error) {
 	}
 }
 
-type FsItems struct {
-	Folders []fs.DirEntry
-	Files   []fs.DirEntry
-}
-
-func listFsItems(fSys fs.FS, path string) (FsItems, error) {
-	fsItems := FsItems{}
+func listFsItems(fSys fs.FS, path string) ([]fs.DirEntry, error) {
+	fsItems := []fs.DirEntry{}
 
 	var err error
 	var dirs []fs.DirEntry
@@ -442,16 +387,11 @@ func listFsItems(fSys fs.FS, path string) (FsItems, error) {
 	}
 
 	for _, c := range dirs {
-		if c.Name() == "" {
+		if c.Name() == "." {
 			continue
 		}
 
-		if c.IsDir() {
-			fsItems.Folders = append(fsItems.Folders, c)
-			continue
-		}
-
-		fsItems.Files = append(fsItems.Files, c)
+		fsItems = append(fsItems, c)
 	}
 
 	return fsItems, nil
@@ -459,25 +399,80 @@ func listFsItems(fSys fs.FS, path string) (FsItems, error) {
 
 func sortDirEntries(files []fs.DirEntry, order MediaOrder) []fs.DirEntry {
 	sort.Slice(files, func(i, j int) bool {
-		// Extract time stamp from file names
-		parts1 := strings.Split(files[i].Name(), "_")
-		parts2 := strings.Split(files[j].Name(), "_")
+		// First check if either is a directory
+		iIsDir := files[i].IsDir()
+		jIsDir := files[j].IsDir()
 
-		if len(parts1) < 2 || len(parts2) < 2 {
-			return files[i].Name() < files[j].Name()
+		// If one is a directory and the other isn't, the directory comes first
+		if iIsDir != jIsDir {
+			return iIsDir
 		}
 
-		switch order {
-		case NewFirst:
-			return parts1[1] > parts2[1]
-		case OldFirst:
-			return parts1[1] < parts2[1]
-		default:
-			return parts1[1] > parts2[1]
+		// If both are directories or both are files, use the existing sorting logic
+		nums1 := extractNumbers(files[i].Name())
+		nums2 := extractNumbers(files[j].Name())
+
+		// If both have numbers, compare them
+		if len(nums1) > 0 && len(nums2) > 0 {
+			// Compare each numeric value in sequence
+			for k := 0; k < len(nums1) && k < len(nums2); k++ {
+				if nums1[k] != nums2[k] {
+					switch order {
+					case NewFirst:
+						return nums1[k] > nums2[k]
+					case OldFirst:
+						return nums1[k] < nums2[k]
+					default:
+						return nums1[k] > nums2[k]
+					}
+				}
+			}
+
+			// If all numbers are equal up to the shorter length, compare lengths
+			if len(nums1) != len(nums2) {
+				switch order {
+				case NewFirst:
+					return len(nums1) > len(nums2)
+				case OldFirst:
+					return len(nums1) < len(nums2)
+				default:
+					return len(nums1) > len(nums2)
+				}
+			}
 		}
+
+		// If no numbers or numbers are equal, fall back to string comparison
+		return files[i].Name() < files[j].Name()
 	})
 
 	return files
+}
+
+// extractNumbers extracts all numeric values from a string
+func extractNumbers(s string) []int64 {
+	var numbers []int64
+	var currentNum string
+	var inNumber bool
+
+	for _, c := range s {
+		if c >= '0' && c <= '9' {
+			currentNum += string(c)
+			inNumber = true
+		} else if inNumber {
+			num, _ := strconv.ParseInt(currentNum, 10, 64)
+			numbers = append(numbers, num)
+			currentNum = ""
+			inNumber = false
+		}
+	}
+
+	// Handle number at the end of string
+	if inNumber {
+		num, _ := strconv.ParseInt(currentNum, 10, 64)
+		numbers = append(numbers, num)
+	}
+
+	return numbers
 }
 
 // filterDirEntries takes filter string like "post reel" and filter all
@@ -536,11 +531,13 @@ func makeGalleryRootHandler(fSys fs.FS) func(w http.ResponseWriter, r *http.Requ
 		if filter == "" {
 			filter = r.URL.Query().Get("filter")
 		}
-		filtered := filterDirEntries(fsItems.Files, filter)
+		filtered := filterDirEntries(fsItems, filter)
 		sortedFsEntries := sortDirEntries(filtered, settings.MediaOrder)
 
-		// 1. PATH IS A FILE. RENDER VIEWER
-		if m.Type != Directory {
+		if m.Type == Image || m.Type == Video {
+			/*
+			 * PLAYER
+			 */
 
 			li, err := makeLinkMedia(m, sortedFsEntries)
 			if err != nil {
@@ -551,42 +548,10 @@ func makeGalleryRootHandler(fSys fs.FS) func(w http.ResponseWriter, r *http.Requ
 			backLink := path.Dir(m.AbsolutePageURL) + "?p=" + path.Base(m.AbsolutePageURL)
 
 			playerHandler(li, backLink)(w, r)
-
-			return
-		}
-
-		// 2. PATH CONTAINS FOLDERS. RENDER ALBUM VIEW
-		if len(fsItems.Folders) > 0 {
-
-			var albums []Album
-			for _, i := range fsItems.Folders {
-				albums = append(albums, Album{
-					Name: i.Name(),
-					Link: path.Join(config.ServerRoot, r.URL.Path, i.Name()),
-				})
-			}
-
-			sort.Slice(albums, func(i, j int) bool {
-				year1, err := strconv.ParseInt(albums[i].Name, 10, 32)
-				if err != nil {
-					fmt.Printf("sort failed, can not parse album name '%s' to int.\n", albums[i].Name)
-					return false
-				}
-				year2, err := strconv.ParseInt(albums[j].Name, 10, 32)
-				if err != nil {
-					fmt.Printf("sort failed, can not parse album name '%s' to int.\n", albums[j].Name)
-					return false
-				}
-				return year1 > year2
-			})
-
-			albumsHandler(albums, filepath.Dir(config.ServerRoot))(w, r)
-
-			return
-		}
-
-		// 3. PATH CONTAINS MEDIA FILES. RENDER GALLERY VIEW
-		if len(fsItems.Files) > 0 {
+		} else {
+			/*
+			 * GALLERY
+			 */
 
 			var media []Media
 			for _, f := range sortedFsEntries {
@@ -595,13 +560,8 @@ func makeGalleryRootHandler(fSys fs.FS) func(w http.ResponseWriter, r *http.Requ
 			}
 
 			galleryHandler(media, m.RelativePageURL, path.Dir(m.AbsolutePageURL), settings)(w, r)
-
-			return
 		}
-
-		writeError(w, http.StatusNotFound, "Not Found")
 	}
-
 }
 
 func makeUpdateHandler(update func() error) func(w http.ResponseWriter, r *http.Request) {

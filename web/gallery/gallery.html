@@ -33,16 +33,19 @@
     </section>
     <section class="gallery">
       {{range .Images}}
-      <div class="image">
-        <!-- <p>{{.PublicPath}}</p> -->
-        <a href="{{.AbsolutePageURL}}">
-          {{if isImage .FileName}}
+      <a href="{{.AbsolutePageURL}}">
+        <div class={{.Type}}>
+          
+          {{if eq .Type "Image"}}
           <img class="lazy" data-url="{{.PublicPath}}" />
-          {{else if isVideo .FileName}}
+          {{else if eq .Type "Video"}}
           <video class="lazy" data-url="{{.PublicPath}}" muted autoplay loop />
+          {{else if eq .Type "Directory"}}
+          <p class="dir">{{.DirName}}</p>
           {{end}}
-        </a>
-      </div>
+          
+        </div>
+      </a>
       {{end}}
     </section>
     <script>

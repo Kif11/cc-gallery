@@ -12,7 +12,6 @@ import (
 	"path"
 	"path/filepath"
 	"sort"
-	"strconv"
 	"strings"
 	"testing/fstest"
 
@@ -125,9 +124,17 @@ type PlayerPage struct {
 	JS       template.JS
 }
 
-func writeError(w http.ResponseWriter, header int, msg string) {
-	w.WriteHeader(header)
-	w.Write([]byte(msg))
+func isDir(path string) bool {
+	return filepath.Ext(path) == ""
+}
+
+func getEnv(name string, fallback string) string {
+	value := os.Getenv(name)
+	if value == "" {
+		fmt.Printf("[-] Environment value for %s is not set, using default '%s'\n", name, fallback)
+		return fallback
+	}
+	return value
 }
 
 func getMediaType(filePath string) MediaFileType {
@@ -169,10 +176,8 @@ func makeMedia(url string, config Config) Media {
 func makeLinkMedia(m Media, images []fs.DirEntry) (LinkedMedia, error) {
 	li := LinkedMedia{}
 
-	sortedMedia := sortDirEntries(images)
-
-	for i := 0; i < len(sortedMedia); i++ {
-		f := sortedMedia[i]
+	for i := 0; i < len(images); i++ {
+		f := images[i]
 
 		if f.Name() != m.FileName {
 			continue
@@ -186,35 +191,24 @@ func makeLinkMedia(m Media, images []fs.DirEntry) (LinkedMedia, error) {
 			return li, nil
 		}
 
+		dir := path.Dir(m.RelativePageURL)
+
 		if i == 0 {
 			// First item
-			li.Next = makeMedia(path.Join(path.Dir(m.RelativePageURL), images[i+1].Name()), config)
+			li.Next = makeMedia(path.Join(dir, images[i+1].Name()), config)
 		} else if i == len(images)-1 {
 			// Last item
-			li.Prev = makeMedia(path.Join(path.Dir(m.RelativePageURL), images[i-1].Name()), config)
+			li.Prev = makeMedia(path.Join(dir, images[i-1].Name()), config)
 		} else {
 			// Middle item
-			li.Next = makeMedia(path.Join(path.Dir(m.RelativePageURL), images[i+1].Name()), config)
-			li.Prev = makeMedia(path.Join(path.Dir(m.RelativePageURL), images[i-1].Name()), config)
+			li.Next = makeMedia(path.Join(dir, images[i+1].Name()), config)
+			li.Prev = makeMedia(path.Join(dir, images[i-1].Name()), config)
 		}
 
 		return li, nil
 	}
 
 	return li, fmt.Errorf("image with id %s not found", m.FileName)
-}
-
-func isDir(path string) bool {
-	return filepath.Ext(path) == ""
-}
-
-func getEnv(name string, fallback string) string {
-	value := os.Getenv(name)
-	if value == "" {
-		fmt.Printf("[-] Environment value for %s is not set, using default '%s'\n", name, fallback)
-		return fallback
-	}
-	return value
 }
 
 func s3List() ([]string, error) {
@@ -317,68 +311,22 @@ func listFsItems(fSys fs.FS, path string) ([]fs.DirEntry, error) {
 	return fsItems, nil
 }
 
+func stripFirsToken(name, sep string) string {
+	if strings.Contains(name, sep) {
+		return strings.Join(strings.Split(name, sep)[1:], sep)
+	}
+	return name
+}
+
 func sortDirEntries(files []fs.DirEntry) []fs.DirEntry {
 	sort.Slice(files, func(i, j int) bool {
-		// First check if either is a directory
-		iIsDir := files[i].IsDir()
-		jIsDir := files[j].IsDir()
+		n1 := stripFirsToken(files[i].Name(), "_")
+		n2 := stripFirsToken(files[j].Name(), "_")
 
-		// If one is a directory and the other isn't, the directory comes first
-		if iIsDir != jIsDir {
-			return iIsDir
-		}
-
-		// If both are directories or both are files, use the existing sorting logic
-		nums1 := extractNumbers(files[i].Name())
-		nums2 := extractNumbers(files[j].Name())
-
-		// If both have numbers, compare them
-		if len(nums1) > 0 && len(nums2) > 0 {
-			// Compare each numeric value in sequence
-			for k := 0; k < len(nums1) && k < len(nums2); k++ {
-				if nums1[k] != nums2[k] {
-					return nums1[k] > nums2[k]
-				}
-			}
-
-			// If all numbers are equal up to the shorter length, compare lengths
-			if len(nums1) != len(nums2) {
-				return len(nums1) > len(nums2)
-			}
-		}
-
-		// If no numbers or numbers are equal, fall back to string comparison
-		return files[i].Name() < files[j].Name()
+		return n1 > n2
 	})
 
 	return files
-}
-
-// extractNumbers extracts all numeric values from a string
-func extractNumbers(s string) []int64 {
-	var numbers []int64
-	var currentNum string
-	var inNumber bool
-
-	for _, c := range s {
-		if c >= '0' && c <= '9' {
-			currentNum += string(c)
-			inNumber = true
-		} else if inNumber {
-			num, _ := strconv.ParseInt(currentNum, 10, 64)
-			numbers = append(numbers, num)
-			currentNum = ""
-			inNumber = false
-		}
-	}
-
-	// Handle number at the end of string
-	if inNumber {
-		num, _ := strconv.ParseInt(currentNum, 10, 64)
-		numbers = append(numbers, num)
-	}
-
-	return numbers
 }
 
 // filterDirEntries takes filter string like "post reel" and filter all
@@ -407,6 +355,11 @@ func filterDirEntries(entries []fs.DirEntry, filter string) (filtered []fs.DirEn
 	}
 
 	return filtered
+}
+
+func writeError(w http.ResponseWriter, header int, msg string) {
+	w.WriteHeader(header)
+	w.Write([]byte(msg))
 }
 
 func valueFromCookies(cookies []*http.Cookie, name string) string {

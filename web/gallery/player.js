@@ -6,12 +6,14 @@ const videoEl = document.querySelector("video");
 document.addEventListener("keydown", (e) => {
     switch (e.key) {
         case "ArrowLeft":
+        case "a":
             prevLink.click();
             break;
         case "ArrowRight":
+        case "d":
             nextLink.click();
             break;
-        case "ArrowUp": {
+        case "Escape": {
             backLink.click();
             break;
         }

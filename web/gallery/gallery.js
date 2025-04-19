@@ -109,7 +109,7 @@ function setHotkeys() {
 
     document.addEventListener("keydown", (e) => {
         switch (e.key) {
-            case "ArrowUp":
+            case "Escape":
                 backLink.click();
                 break;
         }

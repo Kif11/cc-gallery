@@ -2,7 +2,6 @@ package main
 
 import (
 	"embed"
-	_ "embed"
 	"fmt"
 	"html/template"
 	"io/fs"
@@ -42,32 +41,12 @@ var galleryJs []byte
 //go:embed web/gallery/player.js
 var playerJs []byte
 
-type Config struct {
-	// Root path of remote public server where media is stored
-	CDNRoot string
-	// Root of this server
-	ServerRoot string
-	// Local to the server director with media
-	LocalRoot string
-	// Switch backend from local directory to Digital Ocean Spaces (AWS S3 compatible storage)
-	UseDigitalOceanSpaces string
-}
+// Prefix of your web server URL under which this gallery is hosted
+// e.g. if you have you main site on mysite.org and gallery under mysite.org/gallery
+// you should configure nginx (or other web server) reverse proxy to /gallery and set prefix to /gallery
+var urlPrefix = getEnv("CCG_URL_PREFIX", "/gallery")
 
-// For local directory
-// var config = Config{
-// 	ServerRoot:            "/gallery",
-// 	CDNRoot:               "/public/media",
-// 	LocalRoot:             "/Users/kif/pr/ccgallery/public/media",
-// 	UseDigitalOceanSpaces: getEnv("CCGALLERY_USE_SPACES_STORAGE", "0"),
-// }l
-
-// For Digital Ocean Spaces (S3)
-var config = Config{
-	ServerRoot:            "/gallery",
-	CDNRoot:               "https://cdn.codercat.xyz/gallery",
-	LocalRoot:             ".",
-	UseDigitalOceanSpaces: getEnv("CCGALLERY_USE_SPACES_STORAGE", "1"),
-}
+var webRoot = getEnv("CCG_WEB_ROOT", "")
 
 var funcs = template.FuncMap{
 	"myFunc": func() string { return "hi" }, // This is just a placeholder in case I need to call a function inside any template
@@ -93,8 +72,6 @@ type Media struct {
 	DirName string
 	// Full path to public CDN location of media asset
 	PublicPath string
-	// Full disc path to the asset on the server /homes/bob/public/media/kif/2024/1234_post_0.jpg
-	LocalPath string
 	// Relative URL path as accessed by the client when browsing e.g. kif/2024, snay/2022/myAlbum
 	RelativePageURL string
 	// Full path to the page where asset is rendered e.g. example.com/gallery/kif/2024
@@ -152,7 +129,7 @@ func getMediaType(filePath string) MediaFileType {
 	}
 }
 
-func makeMedia(url string, config Config) Media {
+func makeMedia(url string) Media {
 
 	relativePath := strings.TrimSuffix(strings.TrimPrefix(url, "/"), "/")
 	fName := ""
@@ -165,10 +142,9 @@ func makeMedia(url string, config Config) Media {
 		Type:            getMediaType(fName),
 		FileName:        fName,
 		DirName:         path.Base(relativePath),
-		PublicPath:      fmt.Sprintf("%s/%s", config.CDNRoot, relativePath),
+		PublicPath:      fmt.Sprintf("%s/%s", webRoot, relativePath),
 		RelativePageURL: relativePath,
-		LocalPath:       path.Join(config.LocalRoot, relativePath),
-		AbsolutePageURL: path.Join(config.ServerRoot, relativePath),
+		AbsolutePageURL: path.Join(urlPrefix, relativePath),
 	}
 }
 
@@ -195,14 +171,14 @@ func makeLinkMedia(m Media, images []fs.DirEntry) (LinkedMedia, error) {
 
 		if i == 0 {
 			// First item
-			li.Next = makeMedia(path.Join(dir, images[i+1].Name()), config)
+			li.Next = makeMedia(path.Join(dir, images[i+1].Name()))
 		} else if i == len(images)-1 {
 			// Last item
-			li.Prev = makeMedia(path.Join(dir, images[i-1].Name()), config)
+			li.Prev = makeMedia(path.Join(dir, images[i-1].Name()))
 		} else {
 			// Middle item
-			li.Next = makeMedia(path.Join(dir, images[i+1].Name()), config)
-			li.Prev = makeMedia(path.Join(dir, images[i-1].Name()), config)
+			li.Next = makeMedia(path.Join(dir, images[i+1].Name()))
+			li.Prev = makeMedia(path.Join(dir, images[i-1].Name()))
 		}
 
 		return li, nil
@@ -212,18 +188,18 @@ func makeLinkMedia(m Media, images []fs.DirEntry) (LinkedMedia, error) {
 }
 
 func s3List() ([]string, error) {
+	endpoint := getEnv("CCG_S3_ENDPOINT", "nyc3.digitaloceanspaces.com")
+	region := getEnv("CCG_S3_REGION", "nyc3")
 
-	// TODO: Make it configurable
+	bucket := getEnv("CCG_S3_BUCKET", "cc-storage")
+	key := getEnv("CCG_S3_KEY", "")
+	secret := getEnv("CCG_S3_SECRET", "")
+	galleryFolder := getEnv("CCG_S3_ROOT_DIR", "gallery")
 
-	endpoint := "nyc3.digitaloceanspaces.com"
-	region := "nyc3"
-
-	bucket := getEnv("SPACES_BUCKET", "cc-storage")
-	key := getEnv("SPACES_KEY", "")
-	secret := getEnv("SPACES_SECRET", "")
-	galleryFolder := "gallery"
-
-	// TODO: Check of env var defined
+	if key == "" || secret == "" {
+		fmt.Println("[!] Can not connect to S3. S3_KEY or S3_SECRET enviromental variables are not set!")
+		os.Exit(1)
+	}
 
 	s3Config := &aws.Config{
 		Credentials: credentials.NewStaticCredentials(key, secret, ""),
@@ -247,7 +223,7 @@ func s3List() ([]string, error) {
 		i++
 
 		for _, item := range p.Contents {
-			names = append(names, *item.Key)
+			names = append(names, strings.TrimPrefix(*item.Key, galleryFolder+"/"))
 		}
 
 		return true
@@ -277,8 +253,7 @@ func digitalOceanSpacesFS() (fs.FS, func() error) {
 			delete(s3Fs, k)
 		}
 
-		for _, name := range files {
-			path := strings.TrimPrefix(name, "gallery/")
+		for _, path := range files {
 			if path == "" {
 				continue
 			}
@@ -297,7 +272,7 @@ func listFsItems(fSys fs.FS, path string) ([]fs.DirEntry, error) {
 
 	dirs, err = fs.ReadDir(fSys, path)
 	if err != nil {
-		return fsItems, err
+		return fsItems, fmt.Errorf("error reading directory %s: %w", path, err)
 	}
 
 	for _, c := range dirs {
@@ -318,6 +293,13 @@ func stripFirsToken(name, sep string) string {
 	return name
 }
 
+// This is the main sorting for the gallery.
+// It assume file names are "name", "2024" or "post_12345_0.jpg" which follows the template "<media_type>_<unix_time>_<index>.<ext>"".
+// It will attemnt to strip first token before "_" delimiter.
+// It will sort it base on go string comparison which use ASCII order for each character
+// e.g. "0" comes before "a", "A" comes before "a" and "+" comes before "0" and "a".
+// It compare each char in order, if char is equal the next char is compared.
+// See https://www.asciitable.com/
 func sortDirEntries(files []fs.DirEntry) []fs.DirEntry {
 	sort.Slice(files, func(i, j int) bool {
 		n1 := stripFirsToken(files[i].Name(), "_")
@@ -329,7 +311,7 @@ func sortDirEntries(files []fs.DirEntry) []fs.DirEntry {
 	return files
 }
 
-// filterDirEntries takes filter string like "post reel" and filter all
+// filterDirEntries takes filter string like "post reel" and keep all
 // DirEntries that include "post" or "reel" in their filename
 func filterDirEntries(entries []fs.DirEntry, filter string) (filtered []fs.DirEntry) {
 
@@ -419,16 +401,22 @@ func galleryHandler(media []Media, title string, backLink string) http.HandlerFu
 // Root handler that select apropriate HTTP handler depending on the route requested
 func makeGalleryRootHandler(fSys fs.FS) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
-		m := makeMedia(r.URL.Path, config)
 
-		searchPath := m.LocalPath
+		// Build Media struct for the current requested route
+		// that hold all necessery paths
+		m := makeMedia(r.URL.Path)
+
+		searchPath := m.RelativePageURL
+		if searchPath == "" {
+			searchPath = "."
+		}
 		if m.Type != Directory {
-			searchPath = path.Dir(m.LocalPath)
+			searchPath = path.Dir(m.RelativePageURL)
 		}
 
 		fsItems, err := listFsItems(fSys, searchPath)
 		if err != nil {
-			writeError(w, http.StatusNotFound, "Not Found")
+			writeError(w, http.StatusNotFound, err.Error())
 			return
 		}
 
@@ -450,6 +438,9 @@ func makeGalleryRootHandler(fSys fs.FS) func(w http.ResponseWriter, r *http.Requ
 				return
 			}
 
+			// Construct back link that lead to the gallery page.
+			// The link include "p" parameter that hold current media.
+			// Gallary page will sroll that media into view.
 			backLink := path.Dir(m.AbsolutePageURL) + "?p=" + path.Base(m.AbsolutePageURL)
 
 			playerHandler(li, backLink)(w, r)
@@ -460,7 +451,7 @@ func makeGalleryRootHandler(fSys fs.FS) func(w http.ResponseWriter, r *http.Requ
 
 			var media []Media
 			for _, f := range sortedFsEntries {
-				mi := makeMedia(path.Join(m.RelativePageURL, f.Name()), config)
+				mi := makeMedia(path.Join(m.RelativePageURL, f.Name()))
 				media = append(media, mi)
 			}
 
@@ -469,7 +460,12 @@ func makeGalleryRootHandler(fSys fs.FS) func(w http.ResponseWriter, r *http.Requ
 	}
 }
 
-// Make handler that will update in memory media list from s3
+// Handler that will update s3 file list.
+// Because fetching media from s3 is slow we prefetch the entire collection into RAM.
+// When user update media in the s3 bucket changed won't be reflected until
+//
+//	a) This server is restarted
+//	b) User call GET /updage endpoint
 func makeUpdateHandler(update func() error) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		err := update()
@@ -483,21 +479,47 @@ func makeUpdateHandler(update func() error) func(w http.ResponseWriter, r *http.
 }
 
 func rootHandler(w http.ResponseWriter, r *http.Request) {
-	http.Redirect(w, r, config.ServerRoot, http.StatusFound)
+	http.Redirect(w, r, urlPrefix, http.StatusFound)
+}
+
+// Returns a local filesystem handler that implements fs.FS interface
+func localFS(path string) (fs.FS, func() error) {
+	return os.DirFS(path), func() error {
+		// No-op update function since local filesystem is always up to date
+		return nil
+	}
 }
 
 func main() {
 	mux := http.NewServeMux()
 	galleryMux := http.NewServeMux()
 
-	dirs, update := digitalOceanSpacesFS()
+	localAssetFolder := getEnv("CCG_LOCAL_ASSET_FOLDER", "")
+
+	var rootFS fs.FS
+	var update func() error
+
+	if localAssetFolder != "" {
+		// Use local folder as a media backend
+		rootFS, update = localFS(localAssetFolder)
+
+		assetsFolder := getEnv("CCG_ASSETS_FOLDER", "assets")
+		assetsURLPrefix := getEnv("CCG_ASSETS_URL_PREFIX", "/assets")
+
+		// Handle public assets from public directory under example.com/assets URL
+		fs := http.FileServer(http.Dir(assetsFolder))
+		mux.Handle(assetsURLPrefix+"/", http.StripPrefix(assetsURLPrefix, fs))
+	} else {
+		// Use s3 as media backend
+		rootFS, update = digitalOceanSpacesFS()
+	}
 
 	err := update()
 	if err != nil {
 		panic(err)
 	}
 
-	galleryRootHandler := makeGalleryRootHandler(dirs)
+	galleryRootHandler := makeGalleryRootHandler(rootFS)
 
 	// Configure gallery mux
 	galleryMux.HandleFunc("/", galleryRootHandler)
@@ -505,11 +527,11 @@ func main() {
 	updateHandler := makeUpdateHandler(update)
 
 	// Configure main mux
-	mux.HandleFunc(config.ServerRoot+"/update", updateHandler)
-	mux.Handle(config.ServerRoot+"/", http.StripPrefix(config.ServerRoot, galleryMux))
+	mux.HandleFunc(urlPrefix+"/update", updateHandler)
+	mux.Handle(urlPrefix+"/", http.StripPrefix(urlPrefix, galleryMux))
 	mux.HandleFunc("/", rootHandler)
 
-	address := "localhost:8080"
-	fmt.Printf("Listening on %s\n", address)
+	address := getEnv("CCG_SERVER_ADDRESS", "localhost:8080")
+	fmt.Printf("[+] Listening on %s\n", address)
 	log.Fatal(http.ListenAndServe(address, mux))
 }

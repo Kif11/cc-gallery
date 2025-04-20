@@ -30,7 +30,7 @@ func TestMakePathFromUrl(t *testing.T) {
 	}
 
 	conf := Config{
-		CDNRoot:    "/public/media",
+		WebRoot:    "/public/media",
 		ServerRoot: "/gallery",
 		LocalRoot:  "/home/bob/media",
 	}

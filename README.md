@@ -1,38 +1,45 @@
 ## Codercat Gallery
 
-This is a simple web gallery focused minimalism, simplisity and speed. It support localy stored media as well as media in s3 compatible storage.
+**Codercat Gallery** is a simple, minimalistic, and fast web gallery. It supports both locally stored media and media hosted on S3-compatible storage.
 
-## Importing Instagram data
+---
+
+## Importing Instagram Data
+
+To import Instagram data, run:
 
 ```bash
 go run ./injest/main.go <insta_data_folder> <dst_dir>
 
-# For example
+# Example
 go run ./injest/main.go ~/pr/instagram_data ./assets/media
 ```
 
-Note: `insta_data_folder` directory structure should look like this:
+> **Note:** The `<insta_data_folder>` should follow this directory structure:
 
 ```
 instagram_data_archive/
-    <user>/
-        content/
-            posts_1.json
-            ...
-        media/
-            reels/
-            posts/
-            ...
-        ...
+└── <user>/
+    └── content/
+        ├── posts_1.json
+        └── ...
+    └── media/
+        ├── reels/
+        ├── posts/
+        └── ...
 ```
+
+---
 
 ## Deployment
 
-The gallery build into single self-contain binary that can be deployed to a server. I usually use `scp` command in conjuntion with `systemd` for persistance (see `deploy.sh` script)
+The gallery is built as a single self-contained binary, making deployment simple. I usually use the `scp` command in conjunction with `systemd` for persistence. (See the `deploy.sh` script.)
 
-## Systemd config
+---
 
-To make the gallery server persistent use the following `systemd` config:
+## Systemd Configuration
+
+To run the gallery server as a persistent service, use the following `systemd` configuration:
 
 ```ini
 [Unit]
@@ -58,7 +65,9 @@ ExecStart=/home/kiko/gallery/gallery
 WantedBy=multi-user.target
 ```
 
-Note that the environmental variables in the example above are set for S3 media hosting. Here is a set of variables you need to configure when hosting images from local drive:
+> The environment variables above are configured for S3 media hosting.
+
+For **local media hosting**, use the following environment variables instead:
 
 ```sh
 CCG_WEB_ROOT="/assets/media"
@@ -67,16 +76,16 @@ CCG_ASSETS_FOLDER="assets"
 CCG_ASSETS_URL_PREFIX="/assets"
 ```
 
-## Nginx config
+---
 
-It usually a good idea to use application proxy such as `nginx` to be able to have multiple application on a single server. 
-For hosting this gallery add config bellow to your `nging` site configuration usually located at `/etc/nginx/sites-available/`.
+## Nginx Configuration
+
+Using a reverse proxy like `nginx` is a good idea if you're running multiple applications on the same server. Add the following configuration to your Nginx site config (usually located in `/etc/nginx/sites-available/`):
 
 ```nginx
 server {
-    
     ...
-    
+
     location /gallery/ {
         proxy_pass http://localhost:8080;
         proxy_http_version 1.1;
@@ -86,7 +95,7 @@ server {
         proxy_cache_bypass $http_upgrade;
     }
 
-    // (Optional) for local asset hosting
+    # (Optional) For local asset hosting
     location /assets/ {
         root /home/kiko/gallery/;
     }

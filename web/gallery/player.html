@@ -36,13 +36,13 @@
   <div class="navbar">
     <div class="left">
       {{if ne .Image.Prev.FileName ""}}
-      <a class="btn prev" href="{{.Image.Prev.AbsolutePageURL}}">Prev</a>
+      <a class="btn prev" href="{{.Image.Prev.AbsolutePageURL}}{{.URLParam}}">Prev</a>
       {{end}}
     </div>
-    <a class="btn back" href="{{.BackLink}}">Gallery</a>
+    <a class="btn back" href="{{.BackLink}}{{.URLParam}}">Gallery</a>
     <div class="right">
       {{if ne .Image.Next.FileName ""}}
-      <a class="btn next" href="{{.Image.Next.AbsolutePageURL}}">Next</a>
+      <a class="btn next" href="{{.Image.Next.AbsolutePageURL}}{{.URLParam}}">Next</a>
       {{end}}
     </div>
   </div>

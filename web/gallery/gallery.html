@@ -35,7 +35,7 @@
     </section>
     <section class="gallery">
       {{range .Images}}
-      <a href="{{.AbsolutePageURL}}">
+      <a href="{{.AbsolutePageURL}}{{$.URLParam}}">
         <div class={{.Type}}>
           
           {{if eq .Type "Image"}}

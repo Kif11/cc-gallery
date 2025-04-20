@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"path"
 	"path/filepath"
@@ -87,6 +88,7 @@ type LinkedMedia struct {
 type GalleryPage struct {
 	Title    string
 	Images   []Media
+	URLParam string
 	BackLink string
 	Styles   template.CSS
 	JS       template.JS
@@ -96,6 +98,7 @@ type GalleryPage struct {
 type PlayerPage struct {
 	Title    string
 	Image    LinkedMedia
+	URLParam string
 	BackLink string
 	Styles   template.CSS
 	JS       template.JS
@@ -357,15 +360,32 @@ func valueFromCookies(cookies []*http.Cookie, name string) string {
 // playerHandler render individual media on it's own page
 func playerHandler(li LinkedMedia, title string, backLink string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		// Construct back link that lead to the gallery page.
+		// The link include "p" parameter that hold current media.
+		// Gallary page will sroll that media into view.
+		qq, _ := url.QueryUnescape(r.URL.RawQuery)
+
+		values, err := url.ParseQuery(qq)
+		if err != nil {
+			panic(err)
+		}
+
+		params := make(url.Values)
+		for k, v := range values {
+			params[k] = v
+		}
+		params.Set("p", path.Base(li.Cur.FileName))
+
 		post := PlayerPage{
 			Title:    title,
 			Image:    li,
 			BackLink: backLink,
+			URLParam: "?" + params.Encode(),
 			Styles:   template.CSS(append(playerCss, globalCss...)),
 			JS:       template.JS(append(globalJs, playerJs...)),
 		}
 
-		err := tmpl.ExecuteTemplate(w, "player.html", post)
+		err = tmpl.ExecuteTemplate(w, "player.html", post)
 		if err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
@@ -385,6 +405,7 @@ func galleryHandler(media []Media, title string, backLink string) http.HandlerFu
 		gallery := GalleryPage{
 			Title:    title,
 			Images:   media,
+			URLParam: "?" + r.URL.RawQuery,
 			BackLink: backLink,
 			Styles:   template.CSS(append(galleryCss, globalCss...)),
 			GridSize: gridSize,
@@ -421,11 +442,13 @@ func makeGalleryRootHandler(fSys fs.FS) func(w http.ResponseWriter, r *http.Requ
 			return
 		}
 
-		filter := valueFromCookies(r.Cookies(), "filter")
-		if filter == "" {
-			filter = r.URL.Query().Get("filter")
-		}
+		// filter := valueFromCookies(r.Cookies(), "filter")
+		// if filter == "" {
+		// 	filter = r.URL.Query().Get("filter")
+		// }
+		filter := r.URL.Query().Get("filter")
 		filtered := filterDirEntries(fsItems, filter)
+
 		sortedFsEntries := sortDirEntries(filtered)
 
 		if m.Type == Image || m.Type == Video {
@@ -439,12 +462,7 @@ func makeGalleryRootHandler(fSys fs.FS) func(w http.ResponseWriter, r *http.Requ
 				return
 			}
 
-			// Construct back link that lead to the gallery page.
-			// The link include "p" parameter that hold current media.
-			// Gallary page will sroll that media into view.
-			backLink := path.Dir(m.AbsolutePageURL) + "?p=" + path.Base(m.AbsolutePageURL)
-
-			playerHandler(li, m.FileName, backLink)(w, r)
+			playerHandler(li, m.FileName, path.Dir(m.AbsolutePageURL))(w, r)
 		} else {
 			/*
 			 * GALLERY

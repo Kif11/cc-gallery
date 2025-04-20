@@ -1,8 +1,10 @@
 const getFileName = (path) => path.split("/").slice(-1).pop()
 
+const input = document.getElementById("filter-input")
+
 // Restore scroll position from URL parameter
 function scrollMediaIntoView() {
-    const curMedia = new URLSearchParams(window.location.search).get('p')
+    const curMedia = new URLSearchParams(decodeURI(window.location.search)).get('p')
 
     if (!curMedia) {
         return
@@ -46,19 +48,12 @@ function updateCurrentMediaInURL(visibleElements) {
 
 // Update filter cookie and input value
 function updateFilter() {
-    const searchParams = new URLSearchParams(window.location.search);
+    const searchParams = new URLSearchParams(decodeURI(window.location.search));
     const queryFilter = searchParams.get('filter')
 
     if (queryFilter) {
         // If query parameter provided set filter value and cookie
-        setCookie("filter", queryFilter);
         input.value = queryFilter;
-    } else {
-        // Set filter from cookies value
-        const filter = getCookie("filter")
-        if (filter) {
-            input.value = filter;
-        }
     }
 }
 
@@ -123,13 +118,13 @@ document.addEventListener("DOMContentLoaded", () => {
     scrollMediaIntoView()
 });
 
-// Handle user filter action by setting cookie from filter input
-const input = document.getElementById("filter-input");
-document.getElementById("set-filter").addEventListener("click", function () {
-    setCookie("filter", input.value);
-});
+document.getElementById("clear-filter").addEventListener("click", function (e) {
+    e.preventDefault()
 
-document.getElementById("clear-filter").addEventListener("click", function (event) {
-    eraseCookie("filter");
     input.value = "";
+
+    let url = new URL(window.location.href);
+    url.searchParams.delete('filter');
+
+    window.location.href = url.toString()
 });

@@ -347,16 +347,6 @@ func writeError(w http.ResponseWriter, header int, msg string) {
 	w.Write([]byte(msg))
 }
 
-func valueFromCookies(cookies []*http.Cookie, name string) string {
-	for _, c := range cookies {
-		if c.Name == name {
-			return c.Value
-		}
-	}
-
-	return ""
-}
-
 // playerHandler render individual media on it's own page
 func playerHandler(li LinkedMedia, title string, backLink string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -442,10 +432,6 @@ func makeGalleryRootHandler(fSys fs.FS) func(w http.ResponseWriter, r *http.Requ
 			return
 		}
 
-		// filter := valueFromCookies(r.Cookies(), "filter")
-		// if filter == "" {
-		// 	filter = r.URL.Query().Get("filter")
-		// }
 		filter := r.URL.Query().Get("filter")
 		filtered := filterDirEntries(fsItems, filter)
 

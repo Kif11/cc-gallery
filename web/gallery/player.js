@@ -7,16 +7,22 @@ document.addEventListener("keydown", (e) => {
     switch (e.key) {
         case "ArrowLeft":
         case "a":
-            prevLink.click();
+            if (prevLink) {
+                prevLink.click();
+            }
             break;
         case "ArrowRight":
         case "d":
-            nextLink.click();
+            if (nextLink) {
+                nextLink.click();
+            }
             break;
-        case "Escape": {
-            backLink.click();
+        case "Escape":
+        case "s":
+            if (backLink) {
+                backLink.click();
+            }
             break;
-        }
         case "m":
             videoEl.muted = !videoEl.muted;
             break;

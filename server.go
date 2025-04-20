@@ -355,9 +355,10 @@ func valueFromCookies(cookies []*http.Cookie, name string) string {
 }
 
 // playerHandler render individual media on it's own page
-func playerHandler(li LinkedMedia, backLink string) http.HandlerFunc {
+func playerHandler(li LinkedMedia, title string, backLink string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		post := PlayerPage{
+			Title:    title,
 			Image:    li,
 			BackLink: backLink,
 			Styles:   template.CSS(append(playerCss, globalCss...)),
@@ -443,7 +444,7 @@ func makeGalleryRootHandler(fSys fs.FS) func(w http.ResponseWriter, r *http.Requ
 			// Gallary page will sroll that media into view.
 			backLink := path.Dir(m.AbsolutePageURL) + "?p=" + path.Base(m.AbsolutePageURL)
 
-			playerHandler(li, backLink)(w, r)
+			playerHandler(li, m.FileName, backLink)(w, r)
 		} else {
 			/*
 			 * GALLERY

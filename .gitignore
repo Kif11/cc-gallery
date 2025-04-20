@@ -6,3 +6,4 @@
 .DS_*
 settings.json
 .env*
+.vscode

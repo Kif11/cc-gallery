@@ -2,6 +2,8 @@
 
 **Codercat Gallery** is a simple, minimalistic, and fast web gallery. It supports both locally stored media and media hosted on S3-compatible storage.
 
+![Gallary View](gallery_preview_01.jpg)
+
 ---
 
 ## Importing Instagram Data

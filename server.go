@@ -153,41 +153,35 @@ func makeMedia(url string) Media {
 
 // Return new LinkedMedia that has pointers to next and previous media file
 func makeLinkMedia(m Media, images []fs.DirEntry) (LinkedMedia, error) {
-	li := LinkedMedia{}
+	li := LinkedMedia{Cur: m}
 
-	for i := 0; i < len(images); i++ {
-		f := images[i]
-
-		if f.Name() != m.FileName {
-			continue
+	// Find the index of current media in images array
+	index := -1
+	for i, f := range images {
+		if f.Name() == m.FileName {
+			index = i
+			break
 		}
-
-		li.Cur = m
-
-		// Image found
-
-		if len(images) == 1 { // Array length of 1
-			return li, nil
-		}
-
-		dir := path.Dir(m.RelativePageURL)
-
-		if i == 0 {
-			// First item
-			li.Next = makeMedia(path.Join(dir, images[i+1].Name()))
-		} else if i == len(images)-1 {
-			// Last item
-			li.Prev = makeMedia(path.Join(dir, images[i-1].Name()))
-		} else {
-			// Middle item
-			li.Next = makeMedia(path.Join(dir, images[i+1].Name()))
-			li.Prev = makeMedia(path.Join(dir, images[i-1].Name()))
-		}
-
-		return li, nil
 	}
 
-	return li, fmt.Errorf("image with id %s not found", m.FileName)
+	// Return error if not found
+	if index == -1 {
+		return li, fmt.Errorf("image with id %s not found", m.FileName)
+	}
+
+	dir := path.Dir(m.RelativePageURL)
+
+	// Set previous media if not first item
+	if index > 0 {
+		li.Prev = makeMedia(path.Join(dir, images[index-1].Name()))
+	}
+
+	// Set next media if not last item
+	if index < len(images)-1 {
+		li.Next = makeMedia(path.Join(dir, images[index+1].Name()))
+	}
+
+	return li, nil
 }
 
 func s3List() ([]string, error) {

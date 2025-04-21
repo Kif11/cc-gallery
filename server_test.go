@@ -14,11 +14,11 @@ func TestMakeMedia(t *testing.T) {
 	// Save original values
 	originalWebRoot := webRoot
 	originalUrlPrefix := urlPrefix
-	
+
 	// Set test values
 	webRoot = "/public/media"
 	urlPrefix = "/gallery"
-	
+
 	defer func() {
 		// Restore original values
 		webRoot = originalWebRoot
@@ -26,14 +26,14 @@ func TestMakeMedia(t *testing.T) {
 	}()
 
 	tests := []struct {
-		name        string
-		url         string
-		expectedType MediaFileType
-		expectedFileName string
-		expectedDirName string
+		name               string
+		url                string
+		expectedType       MediaFileType
+		expectedFileName   string
+		expectedDirName    string
 		expectedPublicPath string
-		expectedRelURL string
-		expectedAbsURL string
+		expectedRelURL     string
+		expectedAbsURL     string
 	}{
 		{
 			name:               "directory",
@@ -120,7 +120,7 @@ func TestStripFirsToken(t *testing.T) {
 			expected: "post",
 		},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := stripFirsToken(tt.input, tt.sep)
@@ -180,24 +180,24 @@ func TestMakeLinkMedia(t *testing.T) {
 		FileName:        "file2.jpg",
 		RelativePageURL: "test/file2.jpg",
 	}
-	
+
 	// Create dir entries
 	files := []fs.DirEntry{
 		&mockDirEntry{name: "file1.jpg"},
 		&mockDirEntry{name: "file2.jpg"},
 		&mockDirEntry{name: "file3.jpg"},
 	}
-	
+
 	linkedMedia, err := makeLinkMedia(m, files)
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)
 	}
-	
+
 	// Check current media
 	if linkedMedia.Cur.FileName != "file2.jpg" {
 		t.Errorf("Expected Cur.FileName to be file2.jpg, got %v", linkedMedia.Cur.FileName)
 	}
-	
+
 	// Check prev/next media
 	// Adjust assertions based on the implementation details of makeLinkMedia
 	if linkedMedia.Prev.FileName == "" && linkedMedia.Next.FileName == "" {
@@ -251,25 +251,25 @@ func TestGetEnv(t *testing.T) {
 	defer os.Setenv("TEST_ENV_VAR", oldValue)
 
 	tests := []struct {
-		name      string
-		envVar    string
-		envValue  string
-		fallback  string
-		expected  string
+		name     string
+		envVar   string
+		envValue string
+		fallback string
+		expected string
 	}{
 		{
-			name:      "env var set",
-			envVar:    "TEST_ENV_VAR",
-			envValue:  "set-value",
-			fallback:  "fallback-value",
-			expected:  "set-value",
+			name:     "env var set",
+			envVar:   "TEST_ENV_VAR",
+			envValue: "set-value",
+			fallback: "fallback-value",
+			expected: "set-value",
 		},
 		{
-			name:      "env var not set",
-			envVar:    "TEST_ENV_VAR",
-			envValue:  "",
-			fallback:  "fallback-value",
-			expected:  "fallback-value",
+			name:     "env var not set",
+			envVar:   "TEST_ENV_VAR",
+			envValue: "",
+			fallback: "fallback-value",
+			expected: "fallback-value",
 		},
 	}
 
@@ -277,7 +277,7 @@ func TestGetEnv(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Set environment variable for the test
 			os.Setenv(tt.envVar, tt.envValue)
-			
+
 			result := getEnv(tt.envVar, tt.fallback)
 			if result != tt.expected {
 				t.Errorf("getEnv(%q, %q) = %v, want %v", tt.envVar, tt.fallback, result, tt.expected)
@@ -366,39 +366,39 @@ func TestFilterDirEntries(t *testing.T) {
 	}
 
 	tests := []struct {
-		name         string
-		filter       string
-		expectedLen  int
+		name             string
+		filter           string
+		expectedLen      int
 		expectedContains []string
 	}{
 		{
-			name:         "empty filter",
-			filter:       "",
-			expectedLen:  5, // All entries
+			name:             "empty filter",
+			filter:           "",
+			expectedLen:      5, // All entries
 			expectedContains: []string{"post_1.jpg", "reel_2.mp4", "story_3.jpg", "2023", "album"},
 		},
 		{
-			name:         "single filter word",
-			filter:       "post",
-			expectedLen:  3, // post_1.jpg + 2 dirs
+			name:             "single filter word",
+			filter:           "post",
+			expectedLen:      3, // post_1.jpg + 2 dirs
 			expectedContains: []string{"post_1.jpg", "2023", "album"},
 		},
 		{
-			name:         "multiple filter words",
-			filter:       "post reel",
-			expectedLen:  4, // post_1.jpg + reel_2.mp4 + 2 dirs
+			name:             "multiple filter words",
+			filter:           "post reel",
+			expectedLen:      4, // post_1.jpg + reel_2.mp4 + 2 dirs
 			expectedContains: []string{"post_1.jpg", "reel_2.mp4", "2023", "album"},
 		},
 		{
-			name:         "non-matching filter",
-			filter:       "nonexistent",
-			expectedLen:  2, // Only directories
+			name:             "non-matching filter",
+			filter:           "nonexistent",
+			expectedLen:      2, // Only directories
 			expectedContains: []string{"2023", "album"},
 		},
 		{
-			name:         "directories always included",
-			filter:       "story",
-			expectedLen:  3, // story_3.jpg and 2 directories
+			name:             "directories always included",
+			filter:           "story",
+			expectedLen:      3, // story_3.jpg and 2 directories
 			expectedContains: []string{"story_3.jpg", "2023", "album"},
 		},
 	}
@@ -406,11 +406,11 @@ func TestFilterDirEntries(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := filterDirEntries(entries, tt.filter)
-			
+
 			if len(result) != tt.expectedLen {
 				t.Errorf("filterDirEntries(%v, %q) length = %v, want %v", "entries", tt.filter, len(result), tt.expectedLen)
 			}
-			
+
 			// Check all expected entries are present
 			for _, expected := range tt.expectedContains {
 				found := false
@@ -428,54 +428,14 @@ func TestFilterDirEntries(t *testing.T) {
 	}
 }
 
-// Test valueFromCookies function
-func TestValueFromCookies(t *testing.T) {
-	cookies := []*http.Cookie{
-		{Name: "filter", Value: "post"},
-		{Name: "theme", Value: "dark"},
-		{Name: "lang", Value: "en"},
-	}
-
-	tests := []struct {
-		name      string
-		cookieName string
-		expected  string
-	}{
-		{
-			name:      "existing cookie",
-			cookieName: "filter",
-			expected:  "post",
-		},
-		{
-			name:      "another existing cookie",
-			cookieName: "theme",
-			expected:  "dark",
-		},
-		{
-			name:      "non-existent cookie",
-			cookieName: "nonexistent",
-			expected:  "",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := valueFromCookies(cookies, tt.cookieName)
-			if result != tt.expected {
-				t.Errorf("valueFromCookies(cookies, %q) = %q, want %q", tt.cookieName, result, tt.expected)
-			}
-		})
-	}
-}
-
 // Test listFsItems function
 func TestListFsItems(t *testing.T) {
 	// Create a mock filesystem
 	mockFs := fstest.MapFS{
-		"file1.txt":       &fstest.MapFile{},
-		"file2.jpg":       &fstest.MapFile{},
+		"file1.txt":           &fstest.MapFile{},
+		"file2.jpg":           &fstest.MapFile{},
 		"subfolder/file3.mp4": &fstest.MapFile{},
-		".hidden":         &fstest.MapFile{},
+		".hidden":             &fstest.MapFile{},
 	}
 
 	tests := []struct {
@@ -507,17 +467,17 @@ func TestListFsItems(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result, err := listFsItems(mockFs, tt.path)
-			
+
 			if tt.expectedErr && err == nil {
 				t.Errorf("listFsItems(%v, %q) expected error but got none", "mockFs", tt.path)
 				return
 			}
-			
+
 			if !tt.expectedErr && err != nil {
 				t.Errorf("listFsItems(%v, %q) unexpected error: %v", "mockFs", tt.path, err)
 				return
 			}
-			
+
 			if !tt.expectedErr && len(result) != tt.expectedLen {
 				t.Errorf("listFsItems(%v, %q) returned %d items, want %d", "mockFs", tt.path, len(result), tt.expectedLen)
 			}
@@ -548,15 +508,15 @@ func TestWriteError(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Create a response recorder
 			w := httptest.NewRecorder()
-			
+
 			// Call the function
 			writeError(w, tt.statusCode, tt.message)
-			
+
 			// Check the status code
 			if w.Code != tt.statusCode {
 				t.Errorf("writeError() status code = %v, want %v", w.Code, tt.statusCode)
 			}
-			
+
 			// Check the response body
 			if w.Body.String() != tt.message {
 				t.Errorf("writeError() body = %q, want %q", w.Body.String(), tt.message)

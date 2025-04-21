@@ -133,19 +133,29 @@ func getMediaType(filePath string) MediaFileType {
 }
 
 func makeMedia(url string) Media {
-
-	relativePath := strings.TrimSuffix(strings.TrimPrefix(url, "/"), "/")
+	// Clean up the path by removing leading and trailing slashes
+	relativePath := strings.Trim(url, "/")
+	
+	// Determine if it's a directory or file
+	isDirectory := isDir(relativePath)
+	
+	// For files, get the filename
 	fName := ""
-
-	if !isDir(relativePath) {
+	if !isDirectory {
 		fName = path.Base(relativePath)
+	}
+
+	// Handle special case for root
+	publicPath := path.Join(webRoot, relativePath)
+	if url == "/" {
+		publicPath = webRoot + "/"
 	}
 
 	return Media{
 		Type:            getMediaType(fName),
 		FileName:        fName,
 		DirName:         path.Base(relativePath),
-		PublicPath:      fmt.Sprintf("%s/%s", webRoot, relativePath),
+		PublicPath:      publicPath,
 		RelativePageURL: relativePath,
 		AbsolutePageURL: path.Join(urlPrefix, relativePath),
 	}
@@ -283,9 +293,10 @@ func listFsItems(fSys fs.FS, path string) ([]fs.DirEntry, error) {
 	return fsItems, nil
 }
 
-func stripFirsToken(name, sep string) string {
-	if strings.Contains(name, sep) {
-		return strings.Join(strings.Split(name, sep)[1:], sep)
+func stripFirstToken(name, sep string) string {
+	parts := strings.Split(name, sep)
+	if len(parts) > 1 {
+		return strings.Join(parts[1:], sep)
 	}
 	return name
 }
@@ -299,8 +310,8 @@ func stripFirsToken(name, sep string) string {
 // See https://www.asciitable.com/
 func sortDirEntries(files []fs.DirEntry) []fs.DirEntry {
 	sort.Slice(files, func(i, j int) bool {
-		n1 := stripFirsToken(files[i].Name(), "_")
-		n2 := stripFirsToken(files[j].Name(), "_")
+		n1 := stripFirstToken(files[i].Name(), "_")
+		n2 := stripFirstToken(files[j].Name(), "_")
 
 		return n1 > n2
 	})
@@ -311,32 +322,49 @@ func sortDirEntries(files []fs.DirEntry) []fs.DirEntry {
 // filterDirEntries takes filter string like "post reel" and keep all
 // DirEntries that include "post" or "reel" in their filename
 func filterDirEntries(entries []fs.DirEntry, filter string) (filtered []fs.DirEntry) {
-
+	// Early return if filter is empty
+	if filter == "" {
+		return entries
+	}
+	
 	parts := strings.Split(filter, " ")
+	hasEmptyWord := false
+	
+	// Check if there's an empty word in the filter parts
+	for _, word := range parts {
+		if word == "" {
+			hasEmptyWord = true
+			break
+		}
+	}
 
 	for _, f := range entries {
+		// Always include directories
 		if f.IsDir() {
 			filtered = append(filtered, f)
 			continue
 		}
-
-		for _, word := range parts {
-			if word == "" {
-				filtered = append(filtered, f)
-				continue
-			}
-
-			if strings.Contains(f.Name(), word) {
-				filtered = append(filtered, f)
-			}
+		
+		// Include all files if filter has empty word
+		if hasEmptyWord {
+			filtered = append(filtered, f)
+			continue
 		}
 
+		// Look for any filter word in the filename
+		for _, word := range parts {
+			if strings.Contains(f.Name(), word) {
+				filtered = append(filtered, f)
+				break
+			}
+		}
 	}
 
 	return filtered
 }
 
 func writeError(w http.ResponseWriter, header int, msg string) {
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.WriteHeader(header)
 	w.Write([]byte(msg))
 }

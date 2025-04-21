@@ -94,7 +94,7 @@ func TestMakeMedia(t *testing.T) {
 }
 
 // Test stripFirsToken function
-func TestStripFirsToken(t *testing.T) {
+func TestStripFirstToken(t *testing.T) {
 	tests := []struct {
 		name     string
 		input    string
@@ -123,9 +123,9 @@ func TestStripFirsToken(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := stripFirsToken(tt.input, tt.sep)
+			result := stripFirstToken(tt.input, tt.sep)
 			if result != tt.expected {
-				t.Errorf("stripFirsToken(%q, %q) = %q, want %q", tt.input, tt.sep, result, tt.expected)
+				t.Errorf("stripFirstToken(%q, %q) = %q, want %q", tt.input, tt.sep, result, tt.expected)
 			}
 		})
 	}

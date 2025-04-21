@@ -1,7 +1,5 @@
 const getFileName = (path) => path.split("/").slice(-1).pop()
 
-const input = document.getElementById("filter-input")
-
 // Restore scroll position from URL parameter
 function scrollMediaIntoView() {
     const curMedia = new URLSearchParams(decodeURI(window.location.search)).get('p')
@@ -46,15 +44,26 @@ function updateCurrentMediaInURL(visibleElements) {
     window.history.replaceState(null, '', url.toString());
 }
 
-// Update filter cookie and input value
+// Update filter from URL query parameter
 function updateFilter() {
     const searchParams = new URLSearchParams(decodeURI(window.location.search));
     const queryFilter = searchParams.get('filter')
 
     if (queryFilter) {
-        // If query parameter provided set filter value and cookie
-        input.value = queryFilter;
+        document.getElementById("filter-input").value = queryFilter;
     }
+}
+
+// Clear filter and refresh the page
+function clearFilter(e) {
+    e.preventDefault()
+
+    document.getElementById("filter-input").value = "";
+
+    let url = new URL(window.location.href);
+    url.searchParams.delete('filter');
+
+    window.location.href = url.toString()
 }
 
 function loadVisibleElements(els) {
@@ -99,32 +108,10 @@ function lazyLoadMedia() {
     setTimeout(() => loadVisibleElements(visibleElements), 150);
 }
 
-function setHotkeys() {
-    const backLink = document.querySelector(".back");
-
-    document.addEventListener("keydown", (e) => {
-        switch (e.key) {
-            case "Escape":
-                backLink.click();
-                break;
-        }
-    });
-}
-
 document.addEventListener("DOMContentLoaded", () => {
-    setHotkeys()
     lazyLoadMedia()
     updateFilter()
     scrollMediaIntoView()
 });
 
-document.getElementById("clear-filter").addEventListener("click", function (e) {
-    e.preventDefault()
-
-    input.value = "";
-
-    let url = new URL(window.location.href);
-    url.searchParams.delete('filter');
-
-    window.location.href = url.toString()
-});
+document.getElementById("clear-filter").addEventListener("click", clearFilter);

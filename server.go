@@ -521,7 +521,7 @@ func main() {
 	mux := http.NewServeMux()
 	galleryMux := http.NewServeMux()
 
-	assetsFolder := getEnv("CCG_ASSETS_FOLDER", "assets")
+	assetsFolder := getEnv("CCG_LOCAL_ASSETS_FOLDER", "")
 
 	var rootFS fs.FS
 	var update func() error

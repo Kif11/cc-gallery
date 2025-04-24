@@ -18,7 +18,8 @@ document.addEventListener("keydown", (e) => {
             }
             break;
         case "Escape":
-        case "s":
+        case "ArrowUp":
+        case "w":
             e.preventDefault();
             if (backLink) {
                 backLink.click();

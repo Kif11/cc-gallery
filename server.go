@@ -47,7 +47,7 @@ var playerJs []byte
 // you should configure nginx (or other web server) reverse proxy to /gallery and set prefix to /gallery
 var urlPrefix = getEnv("CCG_URL_PREFIX", "/gallery")
 
-var webRoot = getEnv("CCG_WEB_ROOT", "")
+var assetsRoute = getEnv("CCG_ASSETS_ROUTE", "/assets")
 
 var funcs = template.FuncMap{
 	"myFunc": func() string { return "hi" }, // This is just a placeholder in case I need to call a function inside any template
@@ -135,10 +135,10 @@ func getMediaType(filePath string) MediaFileType {
 func makeMedia(url string) Media {
 	// Clean up the path by removing leading and trailing slashes
 	relativePath := strings.Trim(url, "/")
-	
+
 	// Determine if it's a directory or file
 	isDirectory := isDir(relativePath)
-	
+
 	// For files, get the filename
 	fName := ""
 	if !isDirectory {
@@ -146,9 +146,9 @@ func makeMedia(url string) Media {
 	}
 
 	// Handle special case for root
-	publicPath := path.Join(webRoot, relativePath)
+	publicPath := path.Join(assetsRoute, relativePath)
 	if url == "/" {
-		publicPath = webRoot + "/"
+		publicPath = assetsRoute + "/"
 	}
 
 	return Media{
@@ -326,10 +326,10 @@ func filterDirEntries(entries []fs.DirEntry, filter string) (filtered []fs.DirEn
 	if filter == "" {
 		return entries
 	}
-	
+
 	parts := strings.Split(filter, " ")
 	hasEmptyWord := false
-	
+
 	// Check if there's an empty word in the filter parts
 	for _, word := range parts {
 		if word == "" {
@@ -344,7 +344,7 @@ func filterDirEntries(entries []fs.DirEntry, filter string) (filtered []fs.DirEn
 			filtered = append(filtered, f)
 			continue
 		}
-		
+
 		// Include all files if filter has empty word
 		if hasEmptyWord {
 			filtered = append(filtered, f)
@@ -521,21 +521,18 @@ func main() {
 	mux := http.NewServeMux()
 	galleryMux := http.NewServeMux()
 
-	localAssetFolder := getEnv("CCG_LOCAL_ASSET_FOLDER", "")
+	assetsFolder := getEnv("CCG_ASSETS_FOLDER", "assets")
 
 	var rootFS fs.FS
 	var update func() error
 
-	if localAssetFolder != "" {
+	if assetsFolder != "" {
 		// Use local folder as a media backend
-		rootFS, update = localFS(localAssetFolder)
-
-		assetsFolder := getEnv("CCG_ASSETS_FOLDER", "assets")
-		assetsURLPrefix := getEnv("CCG_ASSETS_URL_PREFIX", "/assets")
+		rootFS, update = localFS(assetsFolder)
 
 		// Handle public assets from public directory under example.com/assets URL
 		fs := http.FileServer(http.Dir(assetsFolder))
-		mux.Handle(assetsURLPrefix+"/", http.StripPrefix(assetsURLPrefix, fs))
+		mux.Handle(assetsRoute+"/", http.StripPrefix(assetsRoute, fs))
 	} else {
 		// Use s3 as media backend
 		rootFS, update = digitalOceanSpacesFS()

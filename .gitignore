@@ -5,5 +5,5 @@
 /assets/media*
 .DS_*
 settings.json
-.env*
+.env_s3
 .vscode

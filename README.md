@@ -35,12 +35,7 @@ instagram_data_archive/
 
 ## Development
 
-For setting environmental variables make a file called `.env` with key value pairs like so:
-
-```env
-CCG_WEB_ROOT="/assets/media"
-...
-```
+For setting environmental variables make a file called `.env` with key value pairs. See `.env_local` as an example.
 
 when run `export $(grep -v '^#' .env | xargs)` to set each variable in you active shell.
 
@@ -62,7 +57,7 @@ Description=Codercat Gallery
 After=network.target
 
 [Service]
-Environment=CCG_WEB_ROOT=https://cdn.codercat.xyz/gallery
+Environment=CCG_ASSETS_ROUTE=https://cdn.codercat.xyz/gallery
 Environment=CCG_S3_ENDPOINT=nyc3.digitaloceanspaces.com
 Environment=CCG_S3_REGION=nyc3
 Environment=CCG_S3_BUCKET=cc-storage
@@ -82,15 +77,7 @@ WantedBy=multi-user.target
 
 > The environment variables above are configured for S3 media hosting.
 
-For **local media hosting**, use the following environment variables instead:
-
-```sh
-CCG_WEB_ROOT="/assets/media"
-CCG_LOCAL_ASSET_FOLDER="/Users/kif/pr/ccgallery/assets/media"
-CCG_ASSETS_FOLDER="assets"
-CCG_ASSETS_URL_PREFIX="/assets"
-```
-
+For **local media hosting**, use variables specified in `.env_local`.
 ---
 
 ## Nginx Configuration

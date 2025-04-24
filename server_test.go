@@ -12,16 +12,16 @@ import (
 // Test cases
 func TestMakeMedia(t *testing.T) {
 	// Save original values
-	originalWebRoot := webRoot
+	originalWebRoot := assetsRoute
 	originalUrlPrefix := urlPrefix
 
 	// Set test values
-	webRoot = "/public/media"
+	assetsRoute = "/public/media"
 	urlPrefix = "/gallery"
 
 	defer func() {
 		// Restore original values
-		webRoot = originalWebRoot
+		assetsRoute = originalWebRoot
 		urlPrefix = originalUrlPrefix
 	}()
 

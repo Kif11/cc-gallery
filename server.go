@@ -148,7 +148,7 @@ func makeMedia(url string) Media {
 	}
 
 	// Handle special case for root
-	publicPath := path.Join(assetsRoute, relativePath)
+	publicPath := assetsRoute + "/" + relativePath
 	if url == "/" {
 		publicPath = assetsRoute + "/"
 	}

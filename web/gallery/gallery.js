@@ -19,20 +19,20 @@ function scrollMediaIntoView() {
 
         m.scrollIntoView({
             behavior: "instant",
-            blocl: "center",
+            block: "center",
             inline: 'center'
         })
     })
 }
 
-// We keep track of current media that need to be scrolled into view via URL "p" paramenter
+// We keep track of current media that need to be scrolled into view via URL "p" parameter
 // this function updates it as user scroll the gallery
 function updateCurrentMediaInURL(visibleElements) {
     if (visibleElements.size < 2) {
         return
     }
 
-    // Pick middle media elemnt from visible media on the screen
+    // Pick middle media element from visible media on the screen
     const middle = Array.from(visibleElements)[Math.floor(visibleElements.size / 2)];
     const mediaName = getFileName(middle.dataset.url)
 
@@ -75,7 +75,7 @@ function loadVisibleElements(els) {
     });
 }
 
-// Watch for media withing viepor and load it as it come to view
+// Watch for media withing viewport and load it as it come to view
 function lazyLoadMedia() {
     const lazyMediaEls = document.querySelectorAll(".lazy");
     let scrollTimeout;

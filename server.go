@@ -11,7 +11,9 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"testing/fstest"
 
@@ -293,30 +295,58 @@ func listFsItems(fSys fs.FS, path string) ([]fs.DirEntry, error) {
 	return fsItems, nil
 }
 
-func stripFirstToken(name, sep string) string {
-	parts := strings.Split(name, sep)
-	if len(parts) > 1 {
-		return strings.Join(parts[1:], sep)
-	}
-	return name
-}
-
-// This is the main sorting for the gallery.
-// It assume file names are "name", "2024" or "post_12345_0.jpg" which follows the template "<media_type>_<unix_time>_<index>.<ext>"".
-// It will attemnt to strip first token before "_" delimiter.
-// It will sort it base on go string comparison which use ASCII order for each character
-// e.g. "0" comes before "a", "A" comes before "a" and "+" comes before "0" and "a".
-// It compare each char in order, if char is equal the next char is compared.
-// See https://www.asciitable.com/
+// This function assumes the following file names:
+// - story_12345_0.jpg which follow the template {type}_{unix_timestamp}_{index}.{ext}
+// - file.jpg (arbitrary name)
+// if file name match the template it will be sorted by timestamp (descending) and then by index (ascending)
+// if file name does not match the template it will be sorted by name (descending)
 func sortDirEntries(files []fs.DirEntry) []fs.DirEntry {
-	sort.Slice(files, func(i, j int) bool {
-		n1 := stripFirstToken(files[i].Name(), "_")
-		n2 := stripFirstToken(files[j].Name(), "_")
+	// Define regex pattern for special filenames
+	pattern := regexp.MustCompile(`^([^_]+)_(\d+)_(\d+)`)
 
-		return n1 > n2
+	// Make a copy to avoid modifying original slice
+	sorted := make([]fs.DirEntry, len(files))
+	copy(sorted, files)
+
+	// Sort the slice using custom comparison function
+	sort.Slice(sorted, func(i, j int) bool {
+		// Always put directories first
+		if sorted[i].IsDir() && !sorted[j].IsDir() {
+			return true
+		}
+		if !sorted[i].IsDir() && sorted[j].IsDir() {
+			return false
+		}
+
+		nameI := sorted[i].Name()
+		nameJ := sorted[j].Name()
+
+		// Try to match both filenames against the pattern
+		matchI := pattern.FindStringSubmatch(nameI)
+		matchJ := pattern.FindStringSubmatch(nameJ)
+
+		// If both files match the pattern
+		if matchI != nil && matchJ != nil {
+			// Compare timestamps
+			timestampI, _ := strconv.ParseInt(matchI[2], 10, 64)
+			timestampJ, _ := strconv.ParseInt(matchJ[2], 10, 64)
+
+			if timestampI != timestampJ {
+				return timestampI > timestampJ // ascending order
+			}
+
+			// If timestamps are equal, compare indices
+			indexI, _ := strconv.Atoi(matchI[3])
+			indexJ, _ := strconv.Atoi(matchJ[3])
+
+			return indexI < indexJ // descending order
+		}
+
+		// Fall back to alphabetical sorting for non-matching files
+		return nameI > nameJ
 	})
 
-	return files
+	return sorted
 }
 
 // filterDirEntries takes filter string like "post reel" and keep all
@@ -339,12 +369,6 @@ func filterDirEntries(entries []fs.DirEntry, filter string) (filtered []fs.DirEn
 	}
 
 	for _, f := range entries {
-		// Always include directories
-		if f.IsDir() {
-			filtered = append(filtered, f)
-			continue
-		}
-
 		// Include all files if filter has empty word
 		if hasEmptyWord {
 			filtered = append(filtered, f)

@@ -456,7 +456,7 @@ func galleryHandler(media []Media, title string, backLink string) http.HandlerFu
 	}
 }
 
-// Root handler that select apropriate HTTP handler depending on the route requested
+// Root handler that select appropriate HTTP handler depending on the route requested
 func makeGalleryRootHandler(fSys fs.FS) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 

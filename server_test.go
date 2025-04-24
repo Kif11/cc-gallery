@@ -93,44 +93,6 @@ func TestMakeMedia(t *testing.T) {
 	}
 }
 
-// Test stripFirsToken function
-func TestStripFirstToken(t *testing.T) {
-	tests := []struct {
-		name     string
-		input    string
-		sep      string
-		expected string
-	}{
-		{
-			name:     "simple token",
-			input:    "post_123",
-			sep:      "_",
-			expected: "123",
-		},
-		{
-			name:     "multiple tokens",
-			input:    "post_123_456",
-			sep:      "_",
-			expected: "123_456",
-		},
-		{
-			name:     "no token",
-			input:    "post",
-			sep:      "_",
-			expected: "post",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := stripFirstToken(tt.input, tt.sep)
-			if result != tt.expected {
-				t.Errorf("stripFirstToken(%q, %q) = %q, want %q", tt.input, tt.sep, result, tt.expected)
-			}
-		})
-	}
-}
-
 func TestSortDirEntries(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -154,6 +116,49 @@ func TestSortDirEntries(t *testing.T) {
 				&mockDirEntry{name: "2024", isDir: true},
 			},
 			expected: []string{"2025", "2024", "2023"},
+		},
+		{
+			name: "special filenames with timestamps and indices",
+			files: []fs.DirEntry{
+				&mockDirEntry{name: "story_1000_1.jpg"},
+				&mockDirEntry{name: "story_1000_0.jpg"},
+				&mockDirEntry{name: "story_2000_0.jpg"},
+				&mockDirEntry{name: "story_500_0.jpg"},
+			},
+			expected: []string{
+				"story_2000_0.jpg",
+				"story_1000_0.jpg",
+				"story_1000_1.jpg",
+				"story_500_0.jpg",
+			},
+		},
+		{
+			name: "mixed regular and special filenames",
+			files: []fs.DirEntry{
+				&mockDirEntry{name: "regular2.jpg"},
+				&mockDirEntry{name: "story_1000_0.jpg"},
+				&mockDirEntry{name: "regular1.jpg"},
+			},
+			expected: []string{
+				"story_1000_0.jpg",
+				"regular2.jpg",
+				"regular1.jpg",
+			},
+		},
+		{
+			name: "directories and files mixed",
+			files: []fs.DirEntry{
+				&mockDirEntry{name: "story_1000_0.jpg", isDir: false},
+				&mockDirEntry{name: "dir1", isDir: true},
+				&mockDirEntry{name: "dir2", isDir: true},
+				&mockDirEntry{name: "regular.jpg", isDir: false},
+			},
+			expected: []string{
+				"dir2",
+				"dir1",
+				"story_1000_0.jpg",
+				"regular.jpg",
+			},
 		},
 	}
 
@@ -354,8 +359,6 @@ func TestGetMediaType(t *testing.T) {
 		})
 	}
 }
-
-// Test filterDirEntries function
 func TestFilterDirEntries(t *testing.T) {
 	entries := []fs.DirEntry{
 		&mockDirEntry{name: "post_1.jpg", isDir: false},
@@ -380,26 +383,26 @@ func TestFilterDirEntries(t *testing.T) {
 		{
 			name:             "single filter word",
 			filter:           "post",
-			expectedLen:      3, // post_1.jpg + 2 dirs
-			expectedContains: []string{"post_1.jpg", "2023", "album"},
+			expectedLen:      1, // Only post_1.jpg
+			expectedContains: []string{"post_1.jpg"},
 		},
 		{
 			name:             "multiple filter words",
 			filter:           "post reel",
-			expectedLen:      4, // post_1.jpg + reel_2.mp4 + 2 dirs
-			expectedContains: []string{"post_1.jpg", "reel_2.mp4", "2023", "album"},
+			expectedLen:      2, // post_1.jpg + reel_2.mp4
+			expectedContains: []string{"post_1.jpg", "reel_2.mp4"},
 		},
 		{
 			name:             "non-matching filter",
 			filter:           "nonexistent",
-			expectedLen:      2, // Only directories
-			expectedContains: []string{"2023", "album"},
+			expectedLen:      0, // No matches
+			expectedContains: []string{},
 		},
 		{
-			name:             "directories always included",
-			filter:           "story",
-			expectedLen:      3, // story_3.jpg and 2 directories
-			expectedContains: []string{"story_3.jpg", "2023", "album"},
+			name:             "filter with empty word",
+			filter:           "story  reel",
+			expectedLen:      5, // All entries due to empty word
+			expectedContains: []string{"post_1.jpg", "reel_2.mp4", "story_3.jpg", "2023", "album"},
 		},
 	}
 

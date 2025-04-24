@@ -35,7 +35,7 @@ instagram_data_archive/
 
 ## Development
 
-For setting environmental variables make a file called `.env` with key value pairs. See `.env_local` as an example.
+For setting environmental variables make a file called `.env` with key value pairs. See `.env_local` or `.env_s3` as an example.
 
 when run `export $(grep -v '^#' .env | xargs)` to set each variable in you active shell.
 

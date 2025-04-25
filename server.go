@@ -197,7 +197,7 @@ func s3List() ([]string, error) {
 	bucket := getEnv("CCG_S3_BUCKET", "cc-storage")
 	key := getEnv("CCG_S3_KEY", "")
 	secret := getEnv("CCG_S3_SECRET", "")
-	galleryFolder := getEnv("CCG_S3_ROOT_DIR", "gallery")
+	galleryFolder := getEnv("CCG_S3_ROOT_DIR", "")
 
 	if key == "" || secret == "" {
 		fmt.Println("[!] Can not connect to S3. S3_KEY or S3_SECRET environmental variables are not set!")

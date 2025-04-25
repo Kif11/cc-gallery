@@ -7,3 +7,4 @@
 settings.json
 .env_s3_private
 .vscode
+deploy.sh

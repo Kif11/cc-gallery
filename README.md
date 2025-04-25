@@ -2,7 +2,7 @@
 
 **Codercat Gallery** is a simple, minimalistic, and fast web gallery. It supports both locally stored media and media hosted on S3-compatible storage.
 
-![Gallary View](gallery_preview_01.jpg)
+![Gallery View](gallery_preview_01.jpg)
 
 ## Development
 
@@ -10,7 +10,7 @@ For setting environmental variables make a file called `.env` with key value pai
 
 when run `export $(grep -v '^#' .env | xargs)` to set each variable in you active shell.
 
-For easy build and auto realod functionallity use [go modd](https://github.com/cortesi/modd). The repo provide configuration for it. All you need to do to run the server is to call `modd`.
+Optionally for automatic build and reload functionality use [go modd](https://github.com/cortesi/modd). The repo provide configuration for it. All you need to do to run the server is to call `modd`.
 
 ## Build
 
@@ -24,7 +24,7 @@ After that you can deploy the `bin/gallery` binary to you server.
 
 ## Deployment
 
-The gallery is built as a single self-contained binary, making deployment simple. I usually use the `scp` command in conjunction with `systemd` for persistence. (See the `deploy.sh` script.)
+The gallery is built as a single self-contained binary, making deployment simple. I usually use the `scp` command in conjunction with `systemd` for persistence. (See the `deploy_example.sh` script.)
 
 ## Systemd Configuration
 

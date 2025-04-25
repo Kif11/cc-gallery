@@ -11,23 +11,11 @@ import (
 
 // Test cases
 func TestMakeMedia(t *testing.T) {
-	// Save original values
-	originalWebRoot := assetsRoute
-	originalUrlPrefix := urlPrefix
-
-	// Set test values
-	assetsRoute = "/public/media"
-	urlPrefix = "/gallery"
-
-	defer func() {
-		// Restore original values
-		assetsRoute = originalWebRoot
-		urlPrefix = originalUrlPrefix
-	}()
-
 	tests := []struct {
 		name               string
 		url                string
+		assetsRoute        string
+		urlPrefix          string
 		expectedType       MediaFileType
 		expectedFileName   string
 		expectedDirName    string
@@ -38,6 +26,8 @@ func TestMakeMedia(t *testing.T) {
 		{
 			name:               "directory",
 			url:                "directory/",
+			assetsRoute:        "/public/media",
+			urlPrefix:          "/gallery",
 			expectedType:       Directory,
 			expectedFileName:   "",
 			expectedDirName:    "directory",
@@ -48,6 +38,8 @@ func TestMakeMedia(t *testing.T) {
 		{
 			name:               "file",
 			url:                "directory/file.jpg",
+			assetsRoute:        "/public/media",
+			urlPrefix:          "/gallery",
 			expectedType:       Image,
 			expectedFileName:   "file.jpg",
 			expectedDirName:    "file.jpg",
@@ -58,6 +50,8 @@ func TestMakeMedia(t *testing.T) {
 		{
 			name:               "root",
 			url:                "/",
+			assetsRoute:        "/public/media",
+			urlPrefix:          "/gallery",
 			expectedType:       Directory,
 			expectedFileName:   "",
 			expectedDirName:    ".",
@@ -65,11 +59,23 @@ func TestMakeMedia(t *testing.T) {
 			expectedRelURL:     "",
 			expectedAbsURL:     "/gallery",
 		},
+		{
+			name:               "assetsRoute using CDN URL",
+			url:                "/",
+			assetsRoute:        "https://cdn.example.com/media",
+			urlPrefix:          "/gallery",
+			expectedType:       Directory,
+			expectedFileName:   "",
+			expectedDirName:    ".",
+			expectedPublicPath: "https://cdn.example.com/media/",
+			expectedRelURL:     "",
+			expectedAbsURL:     "/gallery",
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			media := makeMedia(tt.url)
+			media := makeMedia(tt.url, tt.assetsRoute, tt.urlPrefix)
 
 			if media.Type != tt.expectedType {
 				t.Errorf("Type = %v, want %v", media.Type, tt.expectedType)

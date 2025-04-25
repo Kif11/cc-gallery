@@ -49,14 +49,11 @@ var playerJs []byte
 // you should configure nginx (or other web server) reverse proxy to /gallery and set prefix to /gallery
 var urlPrefix = getEnv("CCG_URL_PREFIX", "/gallery")
 
+// URL path under which assets are served
 var assetsRoute = getEnv("CCG_ASSETS_ROUTE", "/assets")
 
-var funcs = template.FuncMap{
-	"myFunc": func() string { return "hi" }, // This is just a placeholder in case I need to call a function inside any template
-}
-
 // Load template pages files
-var tmpl *template.Template = template.Must(template.New("").Funcs(funcs).ParseFS(galleryDir, "web/gallery/*.html"))
+var tmpl *template.Template = template.Must(template.New("").ParseFS(galleryDir, "web/gallery/*.html"))
 
 type MediaFileType string
 
@@ -134,32 +131,29 @@ func getMediaType(filePath string) MediaFileType {
 	}
 }
 
-func makeMedia(url string) Media {
+func makeMedia(relativeURL string, assetsRoute string, urlPrefix string) Media {
 	// Clean up the path by removing leading and trailing slashes
-	relativePath := strings.Trim(url, "/")
-
-	// Determine if it's a directory or file
-	isDirectory := isDir(relativePath)
+	relativeURL = strings.Trim(relativeURL, "/")
 
 	// For files, get the filename
 	fName := ""
-	if !isDirectory {
-		fName = path.Base(relativePath)
+	if !isDir(relativeURL) {
+		fName = path.Base(relativeURL)
 	}
 
 	// Handle special case for root
-	publicPath := assetsRoute + "/" + relativePath
-	if url == "/" {
+	publicPath := assetsRoute + "/" + relativeURL
+	if relativeURL == "/" {
 		publicPath = assetsRoute + "/"
 	}
 
 	return Media{
 		Type:            getMediaType(fName),
 		FileName:        fName,
-		DirName:         path.Base(relativePath),
+		DirName:         path.Base(relativeURL),
 		PublicPath:      publicPath,
-		RelativePageURL: relativePath,
-		AbsolutePageURL: path.Join(urlPrefix, relativePath),
+		RelativePageURL: relativeURL,
+		AbsolutePageURL: path.Join(urlPrefix, relativeURL),
 	}
 }
 
@@ -185,12 +179,12 @@ func makeLinkMedia(m Media, images []fs.DirEntry) (LinkedMedia, error) {
 
 	// Set previous media if not first item
 	if index > 0 {
-		li.Prev = makeMedia(path.Join(dir, images[index-1].Name()))
+		li.Prev = makeMedia(path.Join(dir, images[index-1].Name()), assetsRoute, urlPrefix)
 	}
 
 	// Set next media if not last item
 	if index < len(images)-1 {
-		li.Next = makeMedia(path.Join(dir, images[index+1].Name()))
+		li.Next = makeMedia(path.Join(dir, images[index+1].Name()), assetsRoute, urlPrefix)
 	}
 
 	return li, nil
@@ -206,7 +200,7 @@ func s3List() ([]string, error) {
 	galleryFolder := getEnv("CCG_S3_ROOT_DIR", "gallery")
 
 	if key == "" || secret == "" {
-		fmt.Println("[!] Can not connect to S3. S3_KEY or S3_SECRET enviromental variables are not set!")
+		fmt.Println("[!] Can not connect to S3. S3_KEY or S3_SECRET environmental variables are not set!")
 		os.Exit(1)
 	}
 
@@ -246,7 +240,7 @@ func s3List() ([]string, error) {
 	return names, nil
 }
 
-// Returns `update` function which can be used to refresh s3 entried
+// Returns `update` function which can be used to refresh s3 entries
 // that cached in memory map
 func digitalOceanSpacesFS() (fs.FS, func() error) {
 	var s3Fs fstest.MapFS = make(map[string]*fstest.MapFile)
@@ -339,7 +333,7 @@ func sortDirEntries(files []fs.DirEntry) []fs.DirEntry {
 			indexI, _ := strconv.Atoi(matchI[3])
 			indexJ, _ := strconv.Atoi(matchJ[3])
 
-			return indexI < indexJ // descending order
+			return indexI < indexJ // ascending order
 		}
 
 		// Fall back to alphabetical sorting for non-matching files
@@ -398,7 +392,7 @@ func playerHandler(li LinkedMedia, title string, backLink string) http.HandlerFu
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Construct back link that lead to the gallery page.
 		// The link include "p" parameter that hold current media.
-		// Gallary page will sroll that media into view.
+		// Gallery page will scroll that media into view.
 		qq, _ := url.QueryUnescape(r.URL.RawQuery)
 
 		values, err := url.ParseQuery(qq)
@@ -461,8 +455,8 @@ func makeGalleryRootHandler(fSys fs.FS) func(w http.ResponseWriter, r *http.Requ
 	return func(w http.ResponseWriter, r *http.Request) {
 
 		// Build Media struct for the current requested route
-		// that hold all necessery paths
-		m := makeMedia(r.URL.Path)
+		// that hold all necessary paths
+		m := makeMedia(r.URL.Path, assetsRoute, urlPrefix)
 
 		searchPath := m.RelativePageURL
 		if searchPath == "" {
@@ -502,7 +496,7 @@ func makeGalleryRootHandler(fSys fs.FS) func(w http.ResponseWriter, r *http.Requ
 
 			var media []Media
 			for _, f := range sortedFsEntries {
-				mi := makeMedia(path.Join(m.RelativePageURL, f.Name()))
+				mi := makeMedia(path.Join(m.RelativePageURL, f.Name()), assetsRoute, urlPrefix)
 				media = append(media, mi)
 			}
 
@@ -514,9 +508,7 @@ func makeGalleryRootHandler(fSys fs.FS) func(w http.ResponseWriter, r *http.Requ
 // Handler that will update s3 file list.
 // Because fetching media from s3 is slow we prefetch the entire collection into RAM.
 // When user update media in the s3 bucket changed won't be reflected until
-//
-//	a) This server is restarted
-//	b) User call GET /updage endpoint
+// this server is restarted OR user call GET /update endpoint
 func makeUpdateHandler(update func() error) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		err := update()

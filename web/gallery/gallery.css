@@ -12,7 +12,7 @@ body {
     overflow: hidden;
 }
 
-.Directory {
+.Other {
     display: flex;
     justify-content: center;
     align-items: center;
@@ -25,7 +25,7 @@ body {
     border-width: 1px;
 }
 
-.controlls {
+.controls {
     display: flex;
     padding: 10px;
     position: sticky;
@@ -34,11 +34,11 @@ body {
     background-color: white;
 }
 
-.controlls a {
+.controls a {
     line-height: 22px;
 }
 
-.controlls form {
+.controls form {
     margin: 0 0 0 20px;
 }
 

@@ -16,7 +16,7 @@
     </style>
   </head>
   <body>
-    <section class="controlls">
+    <section class="controls">
       {{if ne .BackLink "/"}}
       <a class="back" href="{{.BackLink}}">Back</a>
       {{end}}
@@ -42,7 +42,7 @@
           <img class="lazy" data-url="{{.PublicPath}}" />
           {{else if eq .Type "Video"}}
           <video class="lazy" data-url="{{.PublicPath}}" muted autoplay loop />
-          {{else if eq .Type "Directory"}}
+          {{else if eq .Type "Other"}}
           <p class="dir">{{.DirName}}</p>
           {{end}}
           

@@ -58,10 +58,9 @@ var tmpl *template.Template = template.Must(template.New("").ParseFS(galleryDir,
 type MediaFileType string
 
 const (
-	Other     = "Other"
-	Image     = "Image"
-	Video     = "Video"
-	Directory = "Directory"
+	Other = "Other"
+	Image = "Image"
+	Video = "Video"
 )
 
 type Media struct {
@@ -116,16 +115,12 @@ func getEnv(name string, fallback string) string {
 	return value
 }
 
-func getMediaType(filePath string) MediaFileType {
-	ext := strings.ToLower(filepath.Ext(filePath))
-
-	switch ext {
+func getMediaType(ext string) MediaFileType {
+	switch strings.ToLower(ext) {
 	case ".jpg", ".jpeg", ".png", ".webp":
 		return Image
 	case ".mp4", ".mov", ".webm":
 		return Video
-	case "":
-		return Directory
 	default:
 		return Other
 	}
@@ -147,8 +142,10 @@ func makeMedia(relativeURL string, assetsRoute string, urlPrefix string) Media {
 		publicPath = assetsRoute + "/"
 	}
 
+	ext := filepath.Ext(fName)
+
 	return Media{
-		Type:            getMediaType(fName),
+		Type:            getMediaType(ext),
 		FileName:        fName,
 		DirName:         path.Base(relativeURL),
 		PublicPath:      publicPath,
@@ -450,38 +447,63 @@ func galleryHandler(media []Media, title string, backLink string) http.HandlerFu
 	}
 }
 
+func filterNonSupported(entries []fs.DirEntry) []fs.DirEntry {
+	filtered := []fs.DirEntry{}
+	for _, en := range entries {
+		ext := filepath.Ext(en.Name())
+		if en.IsDir() {
+			filtered = append(filtered, en)
+			continue
+		}
+		if getMediaType(ext) == Other {
+			continue
+		}
+		filtered = append(filtered, en)
+	}
+
+	return filtered
+}
+
+func getMediaSearchPath(url string) string {
+	ext := path.Ext(url)
+	sp := strings.Trim(url, "/")
+
+	if sp == "" {
+		sp = "."
+	}
+
+	if ext != "" {
+		// URL is a file, remove the file name
+		sp = path.Dir(sp)
+	}
+
+	return sp
+}
+
 // Root handler that select appropriate HTTP handler depending on the route requested
 func makeGalleryRootHandler(fSys fs.FS) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
+		p := getMediaSearchPath(r.URL.Path)
 
-		// Build Media struct for the current requested route
-		// that hold all necessary paths
-		m := makeMedia(r.URL.Path, assetsRoute, urlPrefix)
-
-		searchPath := m.RelativePageURL
-		if searchPath == "" {
-			searchPath = "."
-		}
-		if m.Type != Directory {
-			searchPath = path.Dir(m.RelativePageURL)
-		}
-
-		fsItems, err := listFsItems(fSys, searchPath)
+		fsItems, err := listFsItems(fSys, p)
 		if err != nil {
 			writeError(w, http.StatusNotFound, err.Error())
 			return
 		}
 
 		filter := r.URL.Query().Get("filter")
-		filtered := filterDirEntries(fsItems, filter)
+		filtered := filterNonSupported(fsItems)
+		filtered = filterDirEntries(filtered, filter)
 
 		sortedFsEntries := sortDirEntries(filtered)
 
-		if m.Type == Image || m.Type == Video {
+		// If media is a file and one of the supported media extensions when render it in the player
+		if getMediaType(path.Ext(r.URL.Path)) != Other {
 			/*
 			 * PLAYER
 			 */
 
+			m := makeMedia(r.URL.Path, assetsRoute, urlPrefix)
 			li, err := makeLinkMedia(m, sortedFsEntries)
 			if err != nil {
 				writeError(w, http.StatusNotFound, "Not Found")
@@ -496,11 +518,11 @@ func makeGalleryRootHandler(fSys fs.FS) func(w http.ResponseWriter, r *http.Requ
 
 			var media []Media
 			for _, f := range sortedFsEntries {
-				mi := makeMedia(path.Join(m.RelativePageURL, f.Name()), assetsRoute, urlPrefix)
-				media = append(media, mi)
+				m := makeMedia(path.Join(r.URL.Path, f.Name()), assetsRoute, urlPrefix)
+				media = append(media, m)
 			}
 
-			galleryHandler(media, m.RelativePageURL, path.Dir(m.AbsolutePageURL))(w, r)
+			galleryHandler(media, r.URL.Path, path.Dir(urlPrefix+"/"+r.URL.Path))(w, r)
 		}
 	}
 }

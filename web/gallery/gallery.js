@@ -89,6 +89,8 @@ function lazyLoadMedia() {
                 visibleElements.delete(entry.target);
             }
         });
+    }, {
+        rootMargin: "1000px 1000px 1000px 1000px"
     });
 
     lazyMediaEls.forEach((el) => {

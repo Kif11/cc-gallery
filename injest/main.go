@@ -88,23 +88,13 @@ type Reels struct {
 }
 
 func listDirs(path string) ([]string, error) {
-	var dirNames []string
-
-	// Open the directory
-	f, err := os.Open(path)
-	if err != nil {
-		return dirNames, err
-	}
-	defer f.Close()
-
-	// Read the directory entries
-	entries, err := f.Readdir(-1)
+	entries, err := os.ReadDir(path)
 	if err != nil {
 		fmt.Println("Error reading directory:", err)
-		return dirNames, err
+		return []string{}, err
 	}
 
-	// Iterate over the entries and print the directories
+	var dirNames []string
 	for _, entry := range entries {
 		if entry.IsDir() {
 			dirNames = append(dirNames, entry.Name())
@@ -160,12 +150,15 @@ func fileName(path string) string {
 }
 
 func readJson(jsonFile string, target any) error {
-	file, _ := os.Open(jsonFile)
+	file, err := os.Open(jsonFile)
+	if err != nil {
+		return err
+	}
 	defer file.Close()
 
 	decoder := json.NewDecoder(file)
 
-	err := decoder.Decode(target)
+	err = decoder.Decode(target)
 	if err != nil {
 		return err
 	}
@@ -215,15 +208,15 @@ func hydrateMedia(media []Media, mediaType InstType, user string) []Media {
 	return newMedia
 }
 
-func processUserMedia(user string, srcDir string, dstDir string) {
+func processUserMedia(user string, srcDir string, dstDir string) error {
 	// Read posts metadata
 	postsFile := fmt.Sprintf("%s/%s/content/posts_1.json", srcDir, user)
 	mediaList := []MediaList{}
+	allMedia := []Media{}
 
 	err := readJson(postsFile, &mediaList)
 	if err != nil {
-		fmt.Println(err)
-		return
+		fmt.Printf("error reading posts metadata: %s. Skipping\n", err)
 	}
 
 	// Read IgTv metadata
@@ -232,8 +225,7 @@ func processUserMedia(user string, srcDir string, dstDir string) {
 
 	err = readJson(igTvFile, &igTvList)
 	if err != nil {
-		fmt.Println(err)
-		return
+		fmt.Printf("error reading igtv metadata: %s. Skipping\n", err)
 	}
 
 	// Process stories
@@ -242,8 +234,7 @@ func processUserMedia(user string, srcDir string, dstDir string) {
 
 	err = readJson(storiesFile, &stories)
 	if err != nil {
-		fmt.Println(err)
-		return
+		fmt.Printf("error reading stories metadata: %s. Skipping\n", err)
 	}
 
 	// Process reels
@@ -252,11 +243,8 @@ func processUserMedia(user string, srcDir string, dstDir string) {
 
 	err = readJson(reelsFile, &reels)
 	if err != nil {
-		fmt.Println(err)
-		return
+		fmt.Printf("error reading reels metadata: %s. Skipping\n", err)
 	}
-
-	allMedia := []Media{}
 
 	// Append post
 	for _, m := range mediaList {
@@ -276,7 +264,7 @@ func processUserMedia(user string, srcDir string, dstDir string) {
 		allMedia = append(allMedia, hydrateMedia(m.Media, Reel, user)...)
 	}
 
-	// Debug
+	// // Debug
 	// for i, v := range allMedia {
 	// 	if i < 100 {
 	// 		fmt.Printf("Idx: %d, %+v\n", i, v)
@@ -294,18 +282,22 @@ func processUserMedia(user string, srcDir string, dstDir string) {
 		exists, err := fileExists(dstPath)
 		if err != nil {
 			fmt.Println(err)
-			return
+			continue
 		}
 
-		if !exists {
-			err := copyFile(srcPath, dstPath)
-			if err != nil {
-				fmt.Println(err)
-			}
+		if exists {
+			continue
+		}
+
+		err = copyFile(srcPath, dstPath)
+		if err != nil {
+			fmt.Println("Error copying file:", err)
 		}
 
 		newMedia[dstPath] = append(newMedia[dstPath], media)
 	}
+
+	return nil
 }
 
 func main() {
@@ -324,7 +316,13 @@ func main() {
 		os.Exit(1)
 	}
 
+	fmt.Println("Users found:", users)
+
 	for _, user := range users {
-		processUserMedia(user, srcMetadataDir, destinationDir)
+		err := processUserMedia(user, srcMetadataDir, destinationDir)
+		if err != nil {
+			fmt.Printf("Error processing user %s: %v\n", user, err)
+			continue
+		}
 	}
 }

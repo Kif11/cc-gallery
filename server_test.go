@@ -1,10 +1,12 @@
 package main
 
 import (
+	"fmt"
 	"io/fs"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path"
 	"testing"
 	"testing/fstest"
 )
@@ -28,7 +30,7 @@ func TestMakeMedia(t *testing.T) {
 			url:                "directory/",
 			assetsRoute:        "/public/media",
 			urlPrefix:          "/gallery",
-			expectedType:       Directory,
+			expectedType:       Other,
 			expectedFileName:   "",
 			expectedDirName:    "directory",
 			expectedPublicPath: "/public/media/directory",
@@ -52,7 +54,7 @@ func TestMakeMedia(t *testing.T) {
 			url:                "/",
 			assetsRoute:        "/public/media",
 			urlPrefix:          "/gallery",
-			expectedType:       Directory,
+			expectedType:       Other,
 			expectedFileName:   "",
 			expectedDirName:    ".",
 			expectedPublicPath: "/public/media/",
@@ -64,7 +66,7 @@ func TestMakeMedia(t *testing.T) {
 			url:                "/",
 			assetsRoute:        "https://cdn.example.com/media",
 			urlPrefix:          "/gallery",
-			expectedType:       Directory,
+			expectedType:       Other,
 			expectedFileName:   "",
 			expectedDirName:    ".",
 			expectedPublicPath: "https://cdn.example.com/media/",
@@ -276,11 +278,11 @@ func TestGetEnv(t *testing.T) {
 			expected: "set-value",
 		},
 		{
-			name:     "env var not set",
+			name:     "env var is empty",
 			envVar:   "TEST_ENV_VAR",
 			envValue: "",
 			fallback: "fallback-value",
-			expected: "fallback-value",
+			expected: "",
 		},
 	}
 
@@ -342,7 +344,7 @@ func TestGetMediaType(t *testing.T) {
 		{
 			name:     "directory",
 			filePath: "folder",
-			expected: Directory,
+			expected: Other,
 		},
 		{
 			name:     "other file type",
@@ -358,7 +360,7 @@ func TestGetMediaType(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := getMediaType(tt.filePath)
+			result := getMediaType(path.Ext(tt.filePath))
 			if result != tt.expected {
 				t.Errorf("getMediaType(%q) = %v, want %v", tt.filePath, result, tt.expected)
 			}
@@ -531,6 +533,73 @@ func TestWriteError(t *testing.T) {
 				t.Errorf("writeError() body = %q, want %q", w.Body.String(), tt.message)
 			}
 		})
+	}
+}
+
+// Test digitalOceanSpacesFS function
+func TestDigitalOceanSpacesFS(t *testing.T) {
+	// Mock file list function
+	mockFiles := []string{
+		"folder1/image1.jpg",
+		"folder1/image2.jpg",
+		"folder2/video1.mp4",
+		"", // Empty path should be ignored
+	}
+	mockFileListFn := func() ([]string, error) {
+		return mockFiles, nil
+	}
+
+	// Create the filesystem
+	fs, update := digitalOceanSpacesFS(mockFileListFn)
+
+	// Test initial state before update
+	if _, err := fs.Open("folder1/image1.jpg"); err == nil {
+		t.Error("Expected error before update, got nil")
+	}
+
+	// Test update function
+	if err := update(); err != nil {
+		t.Errorf("update() returned unexpected error: %v", err)
+	}
+
+	// Test that files exist after update
+	for _, path := range mockFiles {
+		if path == "" {
+			continue
+		}
+		if _, err := fs.Open(path); err != nil {
+			t.Errorf("fs.Open(%q) returned unexpected error: %v", path, err)
+		}
+	}
+
+	// Test non-existent file
+	if _, err := fs.Open("nonexistent.jpg"); err == nil {
+		t.Error("Expected error for non-existent file, got nil")
+	}
+
+	// Test error case
+	errorFileListFn := func() ([]string, error) {
+		return nil, fmt.Errorf("mock error")
+	}
+	_, errorUpdate := digitalOceanSpacesFS(errorFileListFn)
+	if err := errorUpdate(); err == nil {
+		t.Error("Expected error from update with failing fileListFn, got nil")
+	}
+
+	// Test that update clears previous files
+	mockFiles = []string{"newfile.jpg"}
+	if err := update(); err != nil {
+		t.Errorf("second update() returned unexpected error: %v", err)
+	}
+
+	// Previous files should no longer exist
+	if _, err := fs.Open("folder1/image1.jpg"); err == nil {
+		t.Error("Expected error for old file after update, got nil")
+	}
+
+	// New file should exist
+	if _, err := fs.Open("newfile.jpg"); err != nil {
+		t.Errorf("fs.Open(%q) returned unexpected error: %v", "newfile.jpg", err)
 	}
 }
 

@@ -14,16 +14,17 @@
 </head>
 
 <body>
-  <!-- <details class="hotkeys">
-    <summary>Hotkeys</summary>
-    <ul>
-      <li>&larr; &rarr; - previous or next post</li>
-      <li>&uarr; - go back to the gallery</li>
-      <li>M - toggle sound on videos</li>
-    </ul>
-  </details> -->
+  <a class="nav-back" href="{{.BackLink}}{{.URLParam}}" >
+    <div class="nav-icon">^</div>
+  </div>
 
-  <div class="ct">
+  <div class="container">
+    {{if ne .Image.Prev.FileName ""}}
+    <a class="nav-prev" href="{{.Image.Prev.AbsolutePageURL}}{{.URLParam}}">
+      <div class="nav-icon"><</div>
+    </a>
+    {{end}}
+
     <div class="main">
       {{if eq .Image.Cur.Type "Image"}}
       <img src="{{.Image.Cur.PublicPath}}" />
@@ -31,21 +32,14 @@
       <video src="{{.Image.Cur.PublicPath}}" controls muted autoplay loop />
       {{end}}
     </div>
+
+    {{if ne .Image.Next.FileName ""}}
+    <a class="nav-next" href="{{.Image.Next.AbsolutePageURL}}{{.URLParam}}">
+      <div class="nav-icon">></div>
+    </a>
+    {{end}}
   </div>
 
-  <div class="navbar">
-    <div class="left">
-      {{if ne .Image.Prev.FileName ""}}
-      <a class="btn prev" href="{{.Image.Prev.AbsolutePageURL}}{{.URLParam}}">Prev</a>
-      {{end}}
-    </div>
-    <a class="btn back" href="{{.BackLink}}{{.URLParam}}">Gallery</a>
-    <div class="right">
-      {{if ne .Image.Next.FileName ""}}
-      <a class="btn next" href="{{.Image.Next.AbsolutePageURL}}{{.URLParam}}">Next</a>
-      {{end}}
-    </div>
-  </div>
   <script>
     {{.JS}}
   </script>

@@ -107,8 +107,8 @@ func isDir(path string) bool {
 }
 
 func getEnv(name string, fallback string) string {
-	value := os.Getenv(name)
-	if value == "" {
+	value, ok := os.LookupEnv(name)
+	if !ok {
 		fmt.Printf("[-] Environment value for %s is not set, using default '%s'\n", name, fallback)
 		return fallback
 	}
@@ -215,13 +215,11 @@ func s3List() ([]string, error) {
 
 	names := []string{}
 
-	i := 0
+	// List all objects in the bucket with the specified prefix
 	err = svc.ListObjectsPages(&s3.ListObjectsInput{
 		Bucket: aws.String(bucket),
 		Prefix: aws.String(galleryFolder),
 	}, func(p *s3.ListObjectsOutput, last bool) (shouldContinue bool) {
-		i++
-
 		for _, item := range p.Contents {
 			names = append(names, strings.TrimPrefix(*item.Key, galleryFolder+"/"))
 		}

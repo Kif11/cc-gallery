@@ -8,7 +8,7 @@
 
 For setting environmental variables make a file called `.env` with key value pairs. See `.env_local` or `.env_s3` as an example.
 
-when run `export $(grep -v '^#' .env | xargs)` to set each variable in you active shell.
+when run `env $(grep -v '^#' .env | xargs) go run server.go` start the server with environmental variables from the file.
 
 Optionally for automatic build and reload functionality use [go modd](https://github.com/cortesi/modd). The repo provide configuration for it. All you need to do to run the server is to call `modd`.
 

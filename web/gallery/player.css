@@ -49,6 +49,7 @@ video {
 .nav-back {
     top: 0;
     left: 50%;
+    transform: translateX(-50%);
 }
 
 .nav-prev {
@@ -84,6 +85,9 @@ video {
 @media (max-width: 768px) {
     .nav-prev,
     .nav-next {
-        margin: 10px;
+        margin: 8px;
+    }
+    .nav-back .nav-icon {
+        font-size: 25px;
     }
 }

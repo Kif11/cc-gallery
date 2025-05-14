@@ -75,11 +75,6 @@ server {
         proxy_set_header Host $host;
         proxy_cache_bypass $http_upgrade;
     }
-
-    # (Optional) For local asset hosting
-    location /assets/ {
-        root /home/kiko/gallery/;
-    }
 }
 ```
 

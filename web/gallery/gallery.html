@@ -42,8 +42,10 @@
           
           {{if eq .Type "Image"}}
           <img class="lazy" data-url="{{.PublicPath}}" />
+          <noscript><img src="{{.PublicPath}}" loading="lazy" /></noscript>
           {{else if eq .Type "Video"}}
           <video class="lazy" data-url="{{.PublicPath}}" muted autoplay loop />
+          <noscript><video src="{{.PublicPath}}" muted autoplay loop /></noscript>
           {{else if eq .Type "Other"}}
           <p class="dir">{{.DirName}}</p>
           {{end}}

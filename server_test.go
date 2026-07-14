@@ -539,18 +539,18 @@ func TestWriteError(t *testing.T) {
 // Test digitalOceanSpacesFS function
 func TestS3FS(t *testing.T) {
 	// Mock file list function
-	mockFiles := []string{
-		"folder1/image1.jpg",
-		"folder1/image2.jpg",
-		"folder2/video1.mp4",
-		"", // Empty path should be ignored
+	mockFiles := []s3Object{
+		{Name: "folder1/image1.jpg", Size: 1000},
+		{Name: "folder1/image2.jpg", Size: 2000},
+		{Name: "folder2/video1.mp4", Size: 3000},
+		{Name: "", Size: 0}, // Empty path should be ignored
 	}
-	mockFileListFn := func() ([]string, error) {
+	mockFileListFn := func() ([]s3Object, error) {
 		return mockFiles, nil
 	}
 
 	// Create the filesystem
-	fs, update := s3FS(mockFileListFn)
+	fs, _, _, update := s3FS(mockFileListFn)
 
 	// Test initial state before update
 	if _, err := fs.Open("folder1/image1.jpg"); err == nil {
@@ -563,12 +563,12 @@ func TestS3FS(t *testing.T) {
 	}
 
 	// Test that files exist after update
-	for _, path := range mockFiles {
-		if path == "" {
+	for _, obj := range mockFiles {
+		if obj.Name == "" {
 			continue
 		}
-		if _, err := fs.Open(path); err != nil {
-			t.Errorf("fs.Open(%q) returned unexpected error: %v", path, err)
+		if _, err := fs.Open(obj.Name); err != nil {
+			t.Errorf("fs.Open(%q) returned unexpected error: %v", obj.Name, err)
 		}
 	}
 
@@ -578,16 +578,16 @@ func TestS3FS(t *testing.T) {
 	}
 
 	// Test error case
-	errorFileListFn := func() ([]string, error) {
+	errorFileListFn := func() ([]s3Object, error) {
 		return nil, fmt.Errorf("mock error")
 	}
-	_, errorUpdate := s3FS(errorFileListFn)
+	_, _, _, errorUpdate := s3FS(errorFileListFn)
 	if err := errorUpdate(); err == nil {
 		t.Error("Expected error from update with failing fileListFn, got nil")
 	}
 
 	// Test that update clears previous files
-	mockFiles = []string{"newfile.jpg"}
+	mockFiles = []s3Object{{Name: "newfile.jpg", Size: 500}}
 	if err := update(); err != nil {
 		t.Errorf("second update() returned unexpected error: %v", err)
 	}
@@ -613,3 +613,96 @@ func (m *mockDirEntry) Name() string               { return m.name }
 func (m *mockDirEntry) IsDir() bool                { return m.isDir }
 func (m *mockDirEntry) Type() fs.FileMode          { return 0 }
 func (m *mockDirEntry) Info() (fs.FileInfo, error) { return nil, nil }
+
+func TestFormatSize(t *testing.T) {
+	tests := []struct {
+		bytes    int64
+		expected string
+	}{
+		{0, "0 B"},
+		{512, "512 B"},
+		{1024, "1.0 KB"},
+		{1536, "1.5 KB"},
+		{1048576, "1.0 MB"},
+		{1073741824, "1.0 GB"},
+		{1610612736, "1.5 GB"},
+	}
+
+	for _, tt := range tests {
+		result := formatSize(tt.bytes)
+		if result != tt.expected {
+			t.Errorf("formatSize(%d) = %q, want %q", tt.bytes, result, tt.expected)
+		}
+	}
+}
+
+func TestGetAlbumSize(t *testing.T) {
+	entries := []fs.DirEntry{
+		&mockDirEntry{name: "file1.jpg", isDir: false},
+		&mockDirEntry{name: "file2.jpg", isDir: false},
+		&mockDirEntry{name: "subdir", isDir: true},
+	}
+
+	sizeMap := map[string]int64{
+		"kif/2024/file1.jpg": 1048576,  // 1 MB
+		"kif/2024/file2.jpg": 2097152,  // 2 MB
+	}
+
+	sizeFn := func(p string) int64 {
+		return sizeMap[p]
+	}
+
+	result := getAlbumSize("kif/2024", entries, sizeFn)
+	expected := "3.0 MB"
+	if result != expected {
+		t.Errorf("getAlbumSize() = %q, want %q", result, expected)
+	}
+}
+
+func TestGetAlbumSize_LeadingSlash(t *testing.T) {
+	entries := []fs.DirEntry{
+		&mockDirEntry{name: "image.jpg", isDir: false},
+	}
+
+	sizeMap := map[string]int64{
+		"kif/2024/image.jpg": 5000000,
+	}
+
+	sizeFn := func(p string) int64 {
+		return sizeMap[p]
+	}
+
+	// With leading slash should still find the size
+	result := getAlbumSize("kif/2024", entries, sizeFn)
+	expected := "4.8 MB"
+	if result != expected {
+		t.Errorf("getAlbumSize() = %q, want %q", result, expected)
+	}
+}
+
+func TestGetAlbumSize_LocalFS(t *testing.T) {
+	// Create temp dir with files
+	tmpDir := t.TempDir()
+	os.WriteFile(tmpDir+"/a.jpg", make([]byte, 1024), 0644)
+	os.WriteFile(tmpDir+"/b.jpg", make([]byte, 2048), 0644)
+
+	fSys := os.DirFS(tmpDir)
+	sizeFn := func(p string) int64 {
+		info, err := os.Stat(tmpDir + "/" + p)
+		if err != nil {
+			return 0
+		}
+		return info.Size()
+	}
+
+	entries, err := fs.ReadDir(fSys, ".")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	result := getAlbumSize(".", entries, sizeFn)
+	expected := "3.0 KB"
+	if result != expected {
+		t.Errorf("getAlbumSize() = %q, want %q", result, expected)
+	}
+}

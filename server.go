@@ -1,9 +1,11 @@
 package main
 
 import (
+	"archive/zip"
 	"embed"
 	"fmt"
 	"html/template"
+	"io"
 	"io/fs"
 	"log"
 	"net/http"
@@ -22,6 +24,13 @@ import (
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
 )
+
+type readFileFunc func(path string) ([]byte, error)
+
+type s3Object struct {
+	Name string
+	Size int64
+}
 
 //go:embed web/gallery/*.html
 var galleryDir embed.FS
@@ -84,13 +93,16 @@ type LinkedMedia struct {
 }
 
 type GalleryPage struct {
-	Title    string
-	Images   []Media
-	URLParam string
-	BackLink string
-	Styles   template.CSS
-	JS       template.JS
-	GridSize string
+	Title       string
+	Images      []Media
+	URLParam    string
+	BackLink    string
+	Styles      template.CSS
+	JS          template.JS
+	GridSize    string
+	CurrentPath string
+	URLPrefix   string
+	AlbumSize   string
 }
 
 type PlayerPage struct {
@@ -187,7 +199,7 @@ func makeLinkMedia(m Media, images []fs.DirEntry) (LinkedMedia, error) {
 	return li, nil
 }
 
-func s3List() ([]string, error) {
+func s3List() ([]s3Object, error) {
 	endpoint := getEnv("CCG_S3_ENDPOINT", "nyc3.digitaloceanspaces.com")
 	region := getEnv("CCG_S3_REGION", "nyc3")
 
@@ -209,11 +221,11 @@ func s3List() ([]string, error) {
 
 	newSession, err := session.NewSession(s3Config)
 	if err != nil {
-		return []string{}, err
+		return []s3Object{}, err
 	}
 	svc := s3.New(newSession)
 
-	names := []string{}
+	objects := []s3Object{}
 
 	// List all objects in the bucket with the specified prefix
 	err = svc.ListObjectsPages(&s3.ListObjectsInput{
@@ -221,7 +233,10 @@ func s3List() ([]string, error) {
 		Prefix: aws.String(galleryFolder),
 	}, func(p *s3.ListObjectsOutput, last bool) (shouldContinue bool) {
 		for _, item := range p.Contents {
-			names = append(names, strings.TrimPrefix(*item.Key, galleryFolder+"/"))
+			objects = append(objects, s3Object{
+				Name: strings.TrimPrefix(*item.Key, galleryFolder+"/"),
+				Size: *item.Size,
+			})
 		}
 
 		return true
@@ -229,33 +244,73 @@ func s3List() ([]string, error) {
 
 	if err != nil {
 		fmt.Println("failed to list objects", err)
-		return []string{}, err
+		return []s3Object{}, err
 	}
 
-	return names, nil
+	return objects, nil
 }
 
 // Returns `update` function which can be used to refresh s3 entries
-// that cached in memory map
-func s3FS(fileListFn func() ([]string, error)) (fs.FS, func() error) {
+// that cached in memory map, and a readFile function for fetching file content from S3
+func s3FS(fileListFn func() ([]s3Object, error)) (fs.FS, readFileFunc, func(string) int64, func() error) {
 	var s3Fs fstest.MapFS = make(map[string]*fstest.MapFile)
+	sizes := make(map[string]int64)
 
-	return s3Fs, func() error {
-		files, err := fileListFn()
+	endpoint := getEnv("CCG_S3_ENDPOINT", "nyc3.digitaloceanspaces.com")
+	region := getEnv("CCG_S3_REGION", "nyc3")
+	bucket := getEnv("CCG_S3_BUCKET", "cc-storage")
+	key := getEnv("CCG_S3_KEY", "")
+	secret := getEnv("CCG_S3_SECRET", "")
+	galleryFolder := getEnv("CCG_S3_ROOT_DIR", "")
+
+	s3Config := &aws.Config{
+		Credentials: credentials.NewStaticCredentials(key, secret, ""),
+		Endpoint:    aws.String(endpoint),
+		Region:      aws.String(region),
+	}
+	sess, _ := session.NewSession(s3Config)
+	svc := s3.New(sess)
+
+	readFile := func(p string) ([]byte, error) {
+		key := galleryFolder + "/" + p
+		if galleryFolder == "" {
+			key = p
+		}
+		result, err := svc.GetObject(&s3.GetObjectInput{
+			Bucket: aws.String(bucket),
+			Key:    aws.String(key),
+		})
+		if err != nil {
+			return nil, err
+		}
+		defer result.Body.Close()
+		return io.ReadAll(result.Body)
+	}
+
+	sizeFn := func(p string) int64 {
+		return sizes[p]
+	}
+
+	return s3Fs, readFile, sizeFn, func() error {
+		objects, err := fileListFn()
 		if err != nil {
 			return err
 		}
 
-		// Clear the map
+		// Clear the maps
 		for k := range s3Fs {
 			delete(s3Fs, k)
 		}
+		for k := range sizes {
+			delete(sizes, k)
+		}
 
-		for _, path := range files {
-			if path == "" {
+		for _, obj := range objects {
+			if obj.Name == "" {
 				continue
 			}
-			s3Fs[path] = &fstest.MapFile{}
+			s3Fs[obj.Name] = &fstest.MapFile{}
+			sizes[obj.Name] = obj.Size
 		}
 
 		return nil
@@ -419,7 +474,7 @@ func playerHandler(li LinkedMedia, title string, backLink string) http.HandlerFu
 }
 
 // galleryHandler renders folder with images as a gallery
-func galleryHandler(media []Media, title string, backLink string) http.HandlerFunc {
+func galleryHandler(media []Media, title string, backLink string, currentPath string, albumSize string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Get grid size from URL parameter, default to 300px if not specified
 		gridSize := r.URL.Query().Get("grid")
@@ -428,13 +483,16 @@ func galleryHandler(media []Media, title string, backLink string) http.HandlerFu
 		}
 
 		gallery := GalleryPage{
-			Title:    title,
-			Images:   media,
-			URLParam: "?" + r.URL.RawQuery,
-			BackLink: backLink,
-			Styles:   template.CSS(append(galleryCss, globalCss...)),
-			GridSize: gridSize,
-			JS:       template.JS(append(globalJs, galleryJs...)),
+			Title:       title,
+			Images:      media,
+			URLParam:    "?" + r.URL.RawQuery,
+			BackLink:    backLink,
+			Styles:      template.CSS(append(galleryCss, globalCss...)),
+			GridSize:    gridSize,
+			JS:          template.JS(append(globalJs, galleryJs...)),
+			CurrentPath: currentPath,
+			URLPrefix:   urlPrefix,
+			AlbumSize:   albumSize,
 		}
 
 		err := tmpl.ExecuteTemplate(w, "gallery.html", gallery)
@@ -479,7 +537,7 @@ func getMediaSearchPath(url string) string {
 }
 
 // Root handler that select appropriate HTTP handler depending on the route requested
-func makeGalleryRootHandler(fSys fs.FS) func(w http.ResponseWriter, r *http.Request) {
+func makeGalleryRootHandler(fSys fs.FS, sizeFn func(string) int64) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		p := getMediaSearchPath(r.URL.Path)
 
@@ -520,7 +578,7 @@ func makeGalleryRootHandler(fSys fs.FS) func(w http.ResponseWriter, r *http.Requ
 				media = append(media, m)
 			}
 
-			galleryHandler(media, r.URL.Path, path.Dir(urlPrefix+"/"+r.URL.Path))(w, r)
+			galleryHandler(media, r.URL.Path, path.Dir(urlPrefix+"/"+r.URL.Path), r.URL.Path, getAlbumSize(p, sortedFsEntries, sizeFn))(w, r)
 		}
 	}
 }
@@ -541,13 +599,97 @@ func makeUpdateHandler(update func() error) func(w http.ResponseWriter, r *http.
 	}
 }
 
+func formatSize(bytes int64) string {
+	const (
+		KB = 1024
+		MB = 1024 * KB
+		GB = 1024 * MB
+	)
+	switch {
+	case bytes >= GB:
+		return fmt.Sprintf("%.1f GB", float64(bytes)/float64(GB))
+	case bytes >= MB:
+		return fmt.Sprintf("%.1f MB", float64(bytes)/float64(MB))
+	case bytes >= KB:
+		return fmt.Sprintf("%.1f KB", float64(bytes)/float64(KB))
+	default:
+		return fmt.Sprintf("%d B", bytes)
+	}
+}
+
+func getAlbumSize(dirPath string, entries []fs.DirEntry, sizeFn func(string) int64) string {
+	var total int64
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		total += sizeFn(path.Join(dirPath, entry.Name()))
+	}
+	return formatSize(total)
+}
+
+func makeDownloadHandler(fSys fs.FS, readFile readFileFunc) func(w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		// Strip the urlPrefix + "/download" prefix from the path
+		p := strings.TrimPrefix(r.URL.Path, urlPrefix+"/download")
+		p = strings.Trim(p, "/")
+		if p == "" {
+			p = "."
+		}
+
+		fsItems, err := listFsItems(fSys, p)
+		if err != nil {
+			writeError(w, http.StatusNotFound, err.Error())
+			return
+		}
+
+		filtered := filterNonSupported(fsItems)
+		sorted := sortDirEntries(filtered)
+
+		w.Header().Set("Content-Type", "application/zip")
+		folderName := path.Base(p)
+		if folderName == "." {
+			folderName = "gallery"
+		}
+		w.Header().Set("Content-Disposition", "attachment; filename=\""+folderName+".zip\"")
+
+		zipWriter := zip.NewWriter(w)
+		defer zipWriter.Close()
+
+		for _, entry := range sorted {
+			if entry.IsDir() {
+				continue
+			}
+			data, err := readFile(path.Join(p, entry.Name()))
+			if err != nil {
+				continue
+			}
+			f, err := zipWriter.Create(entry.Name())
+			if err != nil {
+				continue
+			}
+			f.Write(data)
+		}
+	}
+}
+
 func rootHandler(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, urlPrefix, http.StatusFound)
 }
 
 // Returns a local filesystem handler that implements fs.FS interface
-func localFS(path string) (fs.FS, func() error) {
-	return os.DirFS(path), func() error {
+func localFS(folder string) (fs.FS, readFileFunc, func(string) int64, func() error) {
+	readFile := func(p string) ([]byte, error) {
+		return os.ReadFile(filepath.Join(folder, p))
+	}
+	sizeFn := func(p string) int64 {
+		info, err := os.Stat(filepath.Join(folder, p))
+		if err != nil {
+			return 0
+		}
+		return info.Size()
+	}
+	return os.DirFS(folder), readFile, sizeFn, func() error {
 		// No-op update function since local filesystem is always up to date
 		return nil
 	}
@@ -560,18 +702,20 @@ func main() {
 	assetsFolder := getEnv("CCG_LOCAL_ASSETS_FOLDER", "")
 
 	var rootFS fs.FS
+	var readFile readFileFunc
+	var sizeFn func(string) int64
 	var update func() error
 
 	if assetsFolder != "" {
 		// Use local folder as a media backend
-		rootFS, update = localFS(assetsFolder)
+		rootFS, readFile, sizeFn, update = localFS(assetsFolder)
 
 		// Handle public assets from public directory under example.com/assets URL
 		fs := http.FileServer(http.Dir(assetsFolder))
 		mux.Handle(assetsRoute+"/", http.StripPrefix(assetsRoute, fs))
 	} else {
 		// Use s3 as media backend
-		rootFS, update = s3FS(s3List)
+		rootFS, readFile, sizeFn, update = s3FS(s3List)
 	}
 
 	err := update()
@@ -579,7 +723,8 @@ func main() {
 		panic(err)
 	}
 
-	galleryRootHandler := makeGalleryRootHandler(rootFS)
+	galleryRootHandler := makeGalleryRootHandler(rootFS, sizeFn)
+	downloadHandler := makeDownloadHandler(rootFS, readFile)
 
 	// Configure gallery mux
 	galleryMux.HandleFunc("/", galleryRootHandler)
@@ -588,6 +733,7 @@ func main() {
 
 	// Configure main mux
 	mux.HandleFunc(urlPrefix+"/update", updateHandler)
+	mux.HandleFunc(urlPrefix+"/download/", downloadHandler)
 	mux.Handle(urlPrefix+"/", http.StripPrefix(urlPrefix, galleryMux))
 	mux.HandleFunc("/", rootHandler)
 

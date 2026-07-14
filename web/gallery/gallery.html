@@ -21,7 +21,9 @@
       {{if ne .BackLink "/"}}
       <a class="nav-back" href="{{.BackLink}}">Back</a>
       {{end}}
+      {{if ne .AlbumSize "0 B"}}
       <a class="download" href="{{.URLPrefix}}/download/{{.CurrentPath}}">Download ({{.AlbumSize}})</a>
+      {{end}}
       <form id="filter" method="get">
         <label>Filter</label>
         <input

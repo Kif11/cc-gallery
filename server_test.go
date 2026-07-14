@@ -1,6 +1,8 @@
 package main
 
 import (
+	"archive/zip"
+	"bytes"
 	"fmt"
 	"io/fs"
 	"net/http"
@@ -704,5 +706,60 @@ func TestGetAlbumSize_LocalFS(t *testing.T) {
 	expected := "3.0 KB"
 	if result != expected {
 		t.Errorf("getAlbumSize() = %q, want %q", result, expected)
+	}
+}
+
+func TestCalculateZipSize(t *testing.T) {
+	entries := []fs.DirEntry{
+		&mockDirEntry{name: "a.jpg", isDir: false},
+		&mockDirEntry{name: "b.jpg", isDir: false},
+	}
+
+	sizeMap := map[string]int64{
+		"album/a.jpg": 1000,
+		"album/b.jpg": 2000,
+	}
+	sizeFn := func(p string) int64 { return sizeMap[p] }
+
+	total := calculateZipSize(entries, "album", sizeFn)
+
+	// Entry a.jpg: local header (30+5) + data (1000) + data descriptor (16) + central dir (46+5) = 1102
+	// Entry b.jpg: local header (30+5) + data (2000) + data descriptor (16) + central dir (46+5) = 2102
+	// EOCD: 22
+	expected := int64(1102 + 2102 + 22)
+	if total != expected {
+		t.Errorf("calculateZipSize() = %d, want %d", total, expected)
+	}
+}
+
+func TestCalculateZipSize_WithRealZip(t *testing.T) {
+	// Verify against an actual zip created with Store mode
+	tmpDir := t.TempDir()
+	os.WriteFile(tmpDir+"/a.txt", []byte("hello"), 0644)
+	os.WriteFile(tmpDir+"/b.txt", []byte("world!!"), 0644)
+
+	fSys := os.DirFS(tmpDir)
+	sizeFn := func(p string) int64 {
+		info, _ := os.Stat(tmpDir + "/" + p)
+		return info.Size()
+	}
+
+	entries, _ := fs.ReadDir(fSys, ".")
+
+	// Create actual zip
+	var buf bytes.Buffer
+	zw := zip.NewWriter(&buf)
+	for _, entry := range entries {
+		data, _ := os.ReadFile(tmpDir + "/" + entry.Name())
+		hdr := &zip.FileHeader{Name: entry.Name(), Method: zip.Store}
+		f, _ := zw.CreateHeader(hdr)
+		f.Write(data)
+	}
+	zw.Close()
+
+	// Compare with calculated size
+	calculated := calculateZipSize(entries, ".", sizeFn)
+	if int64(buf.Len()) != calculated {
+		t.Errorf("calculated %d but actual zip is %d bytes", calculated, buf.Len())
 	}
 }

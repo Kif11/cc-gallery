@@ -628,7 +628,26 @@ func getAlbumSize(dirPath string, entries []fs.DirEntry, sizeFn func(string) int
 	return formatSize(total)
 }
 
-func makeDownloadHandler(fSys fs.FS, readFile readFileFunc) func(w http.ResponseWriter, r *http.Request) {
+// calculateZipSize computes the exact byte size of a ZIP archive in Store mode
+// without downloading any file contents. It only needs filenames and sizes.
+// ZIP entry overhead: local header (30 + name) + data + data descriptor (16) + central dir entry (46 + name) + EOCD (22)
+func calculateZipSize(entries []fs.DirEntry, dirPath string, sizeFn func(string) int64) int64 {
+	var total int64
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		total += 30 + int64(len(name)) // local file header
+		total += sizeFn(path.Join(dirPath, name)) // file data
+		total += 16                                // data descriptor
+		total += 46 + int64(len(name)) // central directory entry
+	}
+	total += 22 // end of central directory record
+	return total
+}
+
+func makeDownloadHandler(fSys fs.FS, readFile readFileFunc, sizeFn func(string) int64) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// Strip the urlPrefix + "/download" prefix from the path
 		p := strings.TrimPrefix(r.URL.Path, urlPrefix+"/download")
@@ -652,6 +671,7 @@ func makeDownloadHandler(fSys fs.FS, readFile readFileFunc) func(w http.Response
 			folderName = "gallery"
 		}
 		w.Header().Set("Content-Disposition", "attachment; filename=\""+folderName+".zip\"")
+		w.Header().Set("Content-Length", fmt.Sprintf("%d", calculateZipSize(sorted, p, sizeFn)))
 
 		zipWriter := zip.NewWriter(w)
 		defer zipWriter.Close()
@@ -664,7 +684,11 @@ func makeDownloadHandler(fSys fs.FS, readFile readFileFunc) func(w http.Response
 			if err != nil {
 				continue
 			}
-			f, err := zipWriter.Create(entry.Name())
+			header := &zip.FileHeader{
+				Name:     entry.Name(),
+				Method:   zip.Store,
+			}
+			f, err := zipWriter.CreateHeader(header)
 			if err != nil {
 				continue
 			}
@@ -724,7 +748,7 @@ func main() {
 	}
 
 	galleryRootHandler := makeGalleryRootHandler(rootFS, sizeFn)
-	downloadHandler := makeDownloadHandler(rootFS, readFile)
+	downloadHandler := makeDownloadHandler(rootFS, readFile, sizeFn)
 
 	// Configure gallery mux
 	galleryMux.HandleFunc("/", galleryRootHandler)

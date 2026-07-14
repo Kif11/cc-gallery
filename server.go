@@ -237,7 +237,7 @@ func s3List() ([]string, error) {
 
 // Returns `update` function which can be used to refresh s3 entries
 // that cached in memory map
-func digitalOceanSpacesFS(fileListFn func() ([]string, error)) (fs.FS, func() error) {
+func s3FS(fileListFn func() ([]string, error)) (fs.FS, func() error) {
 	var s3Fs fstest.MapFS = make(map[string]*fstest.MapFile)
 
 	return s3Fs, func() error {
@@ -571,7 +571,7 @@ func main() {
 		mux.Handle(assetsRoute+"/", http.StripPrefix(assetsRoute, fs))
 	} else {
 		// Use s3 as media backend
-		rootFS, update = digitalOceanSpacesFS(s3List)
+		rootFS, update = s3FS(s3List)
 	}
 
 	err := update()

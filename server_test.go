@@ -537,7 +537,7 @@ func TestWriteError(t *testing.T) {
 }
 
 // Test digitalOceanSpacesFS function
-func TestDigitalOceanSpacesFS(t *testing.T) {
+func TestS3FS(t *testing.T) {
 	// Mock file list function
 	mockFiles := []string{
 		"folder1/image1.jpg",
@@ -550,7 +550,7 @@ func TestDigitalOceanSpacesFS(t *testing.T) {
 	}
 
 	// Create the filesystem
-	fs, update := digitalOceanSpacesFS(mockFileListFn)
+	fs, update := s3FS(mockFileListFn)
 
 	// Test initial state before update
 	if _, err := fs.Open("folder1/image1.jpg"); err == nil {
@@ -581,7 +581,7 @@ func TestDigitalOceanSpacesFS(t *testing.T) {
 	errorFileListFn := func() ([]string, error) {
 		return nil, fmt.Errorf("mock error")
 	}
-	_, errorUpdate := digitalOceanSpacesFS(errorFileListFn)
+	_, errorUpdate := s3FS(errorFileListFn)
 	if err := errorUpdate(); err == nil {
 		t.Error("Expected error from update with failing fileListFn, got nil")
 	}

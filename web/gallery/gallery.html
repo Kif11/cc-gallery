@@ -24,6 +24,7 @@
       {{if ne .AlbumSize "0 B"}}
       <a class="download" href="{{.URLPrefix}}/download/{{.CurrentPath}}">Download ({{.AlbumSize}})</a>
       {{end}}
+      <!--
       <form id="filter" method="get">
         <label>Filter</label>
         <input
@@ -36,6 +37,7 @@
         <button id="set-filter" type="submit">Apply</button>
         <button id="clear-filter">Clear</button>
       </form>
+      -->
     </section>
     <section class="gallery">
       {{range .Images}}

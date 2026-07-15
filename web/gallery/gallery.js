@@ -116,4 +116,20 @@ document.addEventListener("DOMContentLoaded", () => {
     scrollMediaIntoView()
 });
 
+document.addEventListener("keydown", (e) => {
+    if (e.target.tagName === "INPUT") return
+
+    const url = new URL(window.location.href)
+    const current = parseInt(url.searchParams.get("grid")) || 300
+    const step = 50
+
+    if (e.key === "+" || e.key === "=") {
+        url.searchParams.set("grid", Math.min(current + step, 800) + "px")
+        window.location.href = url.toString()
+    } else if (e.key === "-") {
+        url.searchParams.set("grid", Math.max(current - step, 100) + "px")
+        window.location.href = url.toString()
+    }
+});
+
 document.getElementById("clear-filter").addEventListener("click", clearFilter);

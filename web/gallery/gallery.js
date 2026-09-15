@@ -111,6 +111,32 @@ function lazyLoadMedia() {
 }
 
 document.addEventListener("DOMContentLoaded", () => {
+    // Apply saved settings from localStorage if no corresponding URL params are present
+    const url = new URL(window.location.href);
+    let changed = false;
+    try {
+        const raw = localStorage.getItem("gallery-settings");
+        if (raw) {
+            const settings = JSON.parse(raw);
+            if (!url.searchParams.has("grid") && settings.gridSize) {
+                url.searchParams.set("grid", settings.gridSize + "px");
+                changed = true;
+            }
+            if (!url.searchParams.has("sort") && settings.sortOrder) {
+                url.searchParams.set("sort", settings.sortOrder);
+                changed = true;
+            }
+            if (!url.searchParams.has("dirs_first") && settings.dirsFirst !== undefined) {
+                url.searchParams.set("dirs_first", settings.dirsFirst.toString());
+                changed = true;
+            }
+        }
+    } catch (e) {}
+    if (changed) {
+        window.location.href = url.toString();
+        return;
+    }
+
     lazyLoadMedia()
     updateFilter()
     scrollMediaIntoView()
@@ -132,4 +158,7 @@ document.addEventListener("keydown", (e) => {
     }
 });
 
-document.getElementById("clear-filter").addEventListener("click", clearFilter);
+const clearFilterBtn = document.getElementById("clear-filter");
+if (clearFilterBtn) {
+    clearFilterBtn.addEventListener("click", clearFilter);
+}

@@ -47,6 +47,11 @@ body {
     line-height: 22px;
 }
 
+.settings-link {
+    margin-left: 20px;
+    line-height: 22px;
+}
+
 img,
 video {
     position: absolute;

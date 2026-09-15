@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/png" href="https://codercat.xyz/favicon.png">
+    <title>Settings</title>
+    <style>
+       {{.Styles}}
+    </style>
+  </head>
+  <body>
+    <section class="controls">
+      <a class="nav-back" href="{{.URLPrefix}}/">Back</a>
+    </section>
+    <section class="settings-container">
+      <h1>Settings</h1>
+      <form id="settings-form">
+        <div class="setting-group">
+          <label for="grid-size">Grid Size</label>
+          <div class="slider-row">
+            <input type="range" id="grid-size" min="100" max="800" step="50" value="300" />
+            <span id="grid-size-label">300px</span>
+          </div>
+        </div>
+
+        <div class="setting-group">
+          <label for="sort-order">Media Sorting</label>
+          <select id="sort-order">
+            <option value="newest">Newest first</option>
+            <option value="oldest">Oldest first</option>
+            <option value="alpha">Alphabetical</option>
+          </select>
+        </div>
+
+        <div class="setting-group">
+          <label for="dirs-first">
+            <input type="checkbox" id="dirs-first" checked />
+            Directories first
+          </label>
+        </div>
+
+        <div class="setting-actions">
+          <button type="submit" class="btn-save">Save</button>
+          <button type="button" id="reset-btn" class="btn-reset">Reset</button>
+          <span id="save-msg"></span>
+        </div>
+      </form>
+    </section>
+    <script>
+      {{.JS}}
+    </script>
+  </body>
+</html>

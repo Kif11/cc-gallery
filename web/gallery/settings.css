@@ -1,0 +1,80 @@
+.settings-container {
+    max-width: 480px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+.settings-container h1 {
+    font-size: 20px;
+    margin: 0 0 24px 0;
+}
+
+.setting-group {
+    margin-bottom: 20px;
+}
+
+.setting-group > label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: bold;
+}
+
+.slider-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.slider-row input[type="range"] {
+    flex: 1;
+}
+
+#grid-size-label {
+    min-width: 50px;
+    text-align: right;
+}
+
+.setting-group select {
+    width: 100%;
+    padding: 6px 8px;
+    font-size: 15px;
+}
+
+.setting-group input[type="checkbox"] {
+    margin-right: 8px;
+}
+
+.setting-actions {
+    display: flex;
+    gap: 12px;
+    margin-top: 28px;
+}
+
+.btn-save, .btn-reset {
+    padding: 8px 20px;
+    font-size: 15px;
+    cursor: pointer;
+}
+
+.btn-save {
+    font-weight: bold;
+}
+
+#save-msg {
+    line-height: 36px;
+    margin-left: 8px;
+    opacity: 0;
+    transition: opacity 0.3s;
+}
+
+#save-msg:not(:empty) {
+    opacity: 1;
+}
+
+@media (prefers-color-scheme: dark) {
+    .setting-group select {
+        background-color: rgb(40, 40, 40);
+        color: rgb(230, 230, 230);
+        border-color: rgb(80, 80, 80);
+    }
+}

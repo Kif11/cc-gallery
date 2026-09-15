@@ -53,6 +53,12 @@ var galleryJs []byte
 //go:embed web/gallery/player.js
 var playerJs []byte
 
+//go:embed web/gallery/settings.css
+var settingsCss []byte
+
+//go:embed web/gallery/settings.js
+var settingsJs []byte
+
 // Prefix of your web server URL under which this gallery is hosted
 // e.g. if you have you main site on mysite.org and gallery under mysite.org/gallery
 // you should configure nginx (or other web server) reverse proxy to /gallery and set prefix to /gallery
@@ -112,6 +118,12 @@ type PlayerPage struct {
 	BackLink string
 	Styles   template.CSS
 	JS       template.JS
+}
+
+type SettingsPage struct {
+	Styles    template.CSS
+	JS        template.JS
+	URLPrefix string
 }
 
 func isDir(path string) bool {
@@ -344,7 +356,7 @@ func listFsItems(fSys fs.FS, path string) ([]fs.DirEntry, error) {
 // - file.jpg (arbitrary name)
 // if file name match the template it will be sorted by timestamp (descending) and then by index (ascending)
 // if file name does not match the template it will be sorted by name (descending)
-func sortDirEntries(files []fs.DirEntry) []fs.DirEntry {
+func sortDirEntries(files []fs.DirEntry, sortOrder string, dirsFirst bool) []fs.DirEntry {
 	// Define regex pattern for special filenames
 	pattern := regexp.MustCompile(`^([^_]+)_(\d+)_(\d+)`)
 
@@ -354,12 +366,14 @@ func sortDirEntries(files []fs.DirEntry) []fs.DirEntry {
 
 	// Sort the slice using custom comparison function
 	sort.Slice(sorted, func(i, j int) bool {
-		// Always put directories first
-		if sorted[i].IsDir() && !sorted[j].IsDir() {
-			return true
-		}
-		if !sorted[i].IsDir() && sorted[j].IsDir() {
-			return false
+		if dirsFirst {
+			// Always put directories first
+			if sorted[i].IsDir() && !sorted[j].IsDir() {
+				return true
+			}
+			if !sorted[i].IsDir() && sorted[j].IsDir() {
+				return false
+			}
 		}
 
 		nameI := sorted[i].Name()
@@ -375,18 +389,30 @@ func sortDirEntries(files []fs.DirEntry) []fs.DirEntry {
 			timestampI, _ := strconv.ParseInt(matchI[2], 10, 64)
 			timestampJ, _ := strconv.ParseInt(matchJ[2], 10, 64)
 
-			if timestampI != timestampJ {
-				return timestampI > timestampJ // ascending order
+			if sortOrder == "oldest" {
+				if timestampI != timestampJ {
+					return timestampI < timestampJ
+				}
+			} else if sortOrder == "alpha" {
+				return nameI < nameJ
+			} else {
+				// newest first (default)
+				if timestampI != timestampJ {
+					return timestampI > timestampJ
+				}
 			}
 
 			// If timestamps are equal, compare indices
 			indexI, _ := strconv.Atoi(matchI[3])
 			indexJ, _ := strconv.Atoi(matchJ[3])
 
-			return indexI < indexJ // ascending order
+			return indexI < indexJ
 		}
 
 		// Fall back to alphabetical sorting for non-matching files
+		if sortOrder == "oldest" || sortOrder == "alpha" {
+			return nameI < nameJ
+		}
 		return nameI > nameJ
 	})
 
@@ -503,6 +529,23 @@ func galleryHandler(media []Media, title string, backLink string, currentPath st
 	}
 }
 
+// settingsHandler renders the settings page
+func settingsHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		page := SettingsPage{
+			Styles:    template.CSS(append(settingsCss, globalCss...)),
+			JS:        template.JS(append(globalJs, settingsJs...)),
+			URLPrefix: urlPrefix,
+		}
+
+		err := tmpl.ExecuteTemplate(w, "settings.html", page)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+	}
+}
+
 func filterNonSupported(entries []fs.DirEntry) []fs.DirEntry {
 	filtered := []fs.DirEntry{}
 	for _, en := range entries {
@@ -551,7 +594,13 @@ func makeGalleryRootHandler(fSys fs.FS, sizeFn func(string) int64) func(w http.R
 		filtered := filterNonSupported(fsItems)
 		filtered = filterDirEntries(filtered, filter)
 
-		sortedFsEntries := sortDirEntries(filtered)
+		sortOrder := r.URL.Query().Get("sort")
+		if sortOrder == "" {
+			sortOrder = "newest"
+		}
+		dirsFirst := r.URL.Query().Get("dirs_first") != "false"
+
+		sortedFsEntries := sortDirEntries(filtered, sortOrder, dirsFirst)
 
 		// If media is a file and one of the supported media extensions when render it in the player
 		if getMediaType(path.Ext(r.URL.Path)) != Other {
@@ -663,7 +712,7 @@ func makeDownloadHandler(fSys fs.FS, readFile readFileFunc, sizeFn func(string) 
 		}
 
 		filtered := filterNonSupported(fsItems)
-		sorted := sortDirEntries(filtered)
+		sorted := sortDirEntries(filtered, "newest", true)
 
 		w.Header().Set("Content-Type", "application/zip")
 		folderName := path.Base(p)
@@ -758,6 +807,7 @@ func main() {
 	// Configure main mux
 	mux.HandleFunc(urlPrefix+"/update", updateHandler)
 	mux.HandleFunc(urlPrefix+"/download/", downloadHandler)
+	mux.HandleFunc(urlPrefix+"/settings", settingsHandler())
 	mux.Handle(urlPrefix+"/", http.StripPrefix(urlPrefix, galleryMux))
 	mux.HandleFunc("/", rootHandler)
 

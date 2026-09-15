@@ -174,7 +174,7 @@ func TestSortDirEntries(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := sortDirEntries(tt.files)
+			result := sortDirEntries(tt.files, "newest", true)
 			if len(result) != len(tt.expected) {
 				t.Errorf("sortDirEntries() length mismatch: got %v, want %v", len(result), len(tt.expected))
 				return
